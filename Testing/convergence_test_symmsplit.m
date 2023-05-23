@@ -32,6 +32,7 @@ for iter = 1:length(dts)
     if iter == length(dts)
         % Show sequence
         figure(); plot_sequence(t, B1, grad);
+        xlabel('Time (ms)')
     end
 
     %% Construct phantom and assign properties

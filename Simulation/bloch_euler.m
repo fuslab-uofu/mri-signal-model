@@ -1,6 +1,6 @@
-function [Mfinal, Msample] = bloch_fdtd(dt, B1, grad, x, T1, T2, options)
-%% [Mfinal, Msample] = bloch_fdtd(dt, B1, grad, x, T1, T2, options)
-% Simulate the Bloch equations using FDTD
+function [Mfinal, Msample] = bloch_euler(dt, B1, grad, x, T1, T2, options)
+%% [Mfinal, Msample] = bloch_euler(dt, B1, grad, x, T1, T2, options)
+% Simulate the Bloch equations using Euler method
 %
 % Units are whole SI units (m, s, T), NOT fractional units (mm, ms, us mT).
 % Unless otherwise noted, all inputs are expected to be real numbers.
@@ -190,7 +190,7 @@ for iter = 1:length(B1)
     omegaY = gamma*(1 + delta).*imag(B1(iter)*B1map);
     omegaZ = gamma*( delta*B0 + (1 + delta).*(B0map + B0drift(iter) + sum(grad(:, iter).*x)) );
 
-    % Compute cross product components (faster than using cross() in this case)
+    % Compute cross product components (faster than using cross())
     crossX = Mloop(2,1,:,:,:,:).*omegaZ - Mloop(3,1,:,:,:,:).*omegaY;
     crossY = Mloop(3,1,:,:,:,:).*omegaX - Mloop(1,1,:,:,:,:).*omegaZ;
     crossZ = Mloop(1,1,:,:,:,:).*omegaY - Mloop(2,1,:,:,:,:).*omegaX;

@@ -1,4 +1,4 @@
-%% fdtd convergence test
+%% euler method convergence test
 
 clear, close all
 
@@ -32,6 +32,7 @@ for iter = 1:length(dts)
     if iter == length(dts)
         % Show sequence
         figure(); plot_sequence(t, B1, grad);
+        xlabel('Time (ms)')
     end
 
     %% Construct phantom and assign properties
@@ -52,7 +53,7 @@ for iter = 1:length(dts)
     M0 = ones(size(z));
     
     %% Simulate
-    [Mfinal, ~] = bloch_fdtd(dt*1e-3, B1*1e-3, grad*1e-3, pos*1e-3, T1*1e-3, T2*1e-3, delta=delta, B0map=dB0);
+    [Mfinal, ~] = bloch_euler(dt*1e-3, B1*1e-3, grad*1e-3, pos*1e-3, T1*1e-3, T2*1e-3, delta=delta, B0map=dB0);
 
     [meas, Mz] = split_magnetization(Mfinal);
 

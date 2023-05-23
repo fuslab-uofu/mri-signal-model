@@ -47,7 +47,7 @@ if any(grad(3, :))
     plotnum = plotnum + 1;
 end
 
-if any(sampleComb)
+if nargin == 4 && any(sampleComb)
     subplot(nplot, 1, plotnum)
     stem(t(sampleComb == 1), sampleComb(sampleComb == 1), 'MarkerSize', 1); grid on; xlim(lims)
     ylabel('ADC')
