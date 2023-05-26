@@ -319,17 +319,27 @@ classdef PulseSequence
             if ~isequal(dtUnits, 'us'); dt = convert_units(dt, 'us', dtUnits); end
         end
 
-        function plot(self, startEvent, endEvent)
-            %% plot(self)
-            % Creates a plot of the pulse sequence
-            % 
-            %% 2023-05-22 Samuel Adams-Tew
+        function out = gradient_moment(self)
+            [t, ~, G, ~] = self.event_waveforms();
+            dt = convert_units(t(2:end) - t(1:end-1), 'us', 's');
+            G = convert_units(G(:, 1:end-1), 'mT/m', 'T/m');
 
+            out = sum(G.*dt, 2);
+        end
+
+        function [t, B1, G, sampleComb] = event_waveforms(self, startEvent, endEvent, dt_max)
+            %% [t, B1, G, sampleComb] = event_waveforms(self, startEvent, endEvent, dt_max)
+            % Generates waveforms covering the range of events given
+            % 
+            %% 2023-05-24 Samuel Adams-Tew
             if ~exist('startEvent', 'var')
                 startEvent = 1;
             end
             if ~exist('endEvent', 'var')
                 endEvent = self.numEvents;
+            end
+            if ~exist('dt_max', 'var')
+                dt_max = Inf;
             end
 
             B1 = [];
@@ -341,7 +351,7 @@ classdef PulseSequence
 
             for eventNum = startEvent:endEvent
                 % Get waveforms for this event
-                [dt, b1tmp, gtmp, samptmp] = self.get_event(eventNum);
+                [dt, b1tmp, gtmp, samptmp] = self.get_event(eventNum, dt_max);
                 t = [t, self.eventTimes(eventNum) + dt.*(1:length(b1tmp))];
                 B1 = [B1, b1tmp];
                 gradX = [gradX, gtmp(1, :)];
@@ -356,7 +366,24 @@ classdef PulseSequence
             gradZ = [gradZ, 0];
             sampleComb = [sampleComb, 0];
 
-            figure(); plot_sequence(t*1e-3, B1, [gradX; gradY; gradZ], sampleComb);
+            G = [gradX; gradY; gradZ];
+        end
+
+        function plot(self, startEvent, endEvent)
+            %% plot(self, startEvent, endEvent)
+            % Creates a plot of the pulse sequence
+            % 
+            %% 2023-05-22 Samuel Adams-Tew
+            if ~exist('startEvent', 'var')
+                startEvent = 1;
+            end
+            if ~exist('endEvent', 'var')
+                endEvent = self.numEvents;
+            end
+
+            [t, B1, G, sampleComb] = self.event_waveforms(startEvent, endEvent);
+
+            figure(); plot_sequence(t*1e-3, B1, G, sampleComb);
             xlabel('Time (ms)')
         end
     end
