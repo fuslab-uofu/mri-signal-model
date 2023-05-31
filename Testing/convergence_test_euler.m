@@ -22,7 +22,7 @@ for iter = 1:length(dts)
     grad = gradient_trap(30, 0.150, T-0.150, 0.150, dt)';
 
     % Add rephasing gradient
-    tmp = gradient_trap(-30, 0.150, 0.95, 0.15, dt)';
+    tmp = gradient_trap(-30, 0.150, 0.85, 0.15, dt)';
     B1 = [B1, zeros(size(tmp))];
     grad = [grad, tmp];
     t = [t, ( T + (0:(length(tmp)-1))*dt )];
