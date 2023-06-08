@@ -18,7 +18,7 @@ classdef PulseSequence
     % ~ Static methods ~
     % grad = gradient_specs(startTime, amplitude, rampUpTime, duration, rampDownTime)
     % rf = rf_specs(startTime, type, FA, duration, phase)
-    % adc = adc_specs(startTime, numSamples, duration)
+    % adc = adc_specs(startTime, samples, duration)
     % 
     % Use 'help PulseSequence/<property or method name>' for property and
     % method documentation.
@@ -91,6 +91,10 @@ classdef PulseSequence
         % * duration [us]: Length of the readout window.
         % * endTime [us]: End time relative to beginning of this event
         % block
+        % * sampleTime [us]: When to collect each sample, relative to the
+        % start of each measurement window. Number of columns is the number
+        % of samples, while number of rows must match the number of
+        % specified measurement windows.
         ADC table
 
         % blockDuration - Scalar value defining the total duration of this
@@ -119,6 +123,9 @@ classdef PulseSequence
         % numSamples - The number of ADC readout samples collected during a
         % single repetition of the sequence.
         numSamples
+
+        % readOutGroups - The start and end times for each readout event
+        readOutGroups
     end
 
     methods
@@ -243,12 +250,19 @@ classdef PulseSequence
             else
                 % Get ADC specs
                 spec = self.ADC(eventADC, :);
-                samplePeriod = dur ./ spec.numSamples; % [us]
                 % Determine when samples should be collected
-                ADCtimes = startTime + samplePeriod*( (1:(dur/samplePeriod)) - 0.5);
+                ADCtimes = spec.startTime + spec.sampleTime;
+
+                % Determine maximum sampling rate allowed by ADC specs
+                samplePeriod = common_rate(round([spec.sampleTime, dur]*10));
+                if samplePeriod == 1
+                    samplePeriod = 1;
+                else
+                    samplePeriod = samplePeriod/10; 
+                end
 
                 % Compute an initial sampling rate
-                dt = dur/ceil(2*dur/samplePeriod); % [us]
+                dt = dur/ceil(dur/samplePeriod); % [us]
                 % Require that dt <= dt_max
                 if dt > dt_max
                     dt = dt/ceil(dt/dt_max);
@@ -319,17 +333,50 @@ classdef PulseSequence
             if ~isequal(dtUnits, 'us'); dt = convert_units(dt, 'us', dtUnits); end
         end
 
-        function plot(self, startEvent, endEvent)
-            %% plot(self)
-            % Creates a plot of the pulse sequence
-            % 
-            %% 2023-05-22 Samuel Adams-Tew
+        function varargout = gradient_moment(self, option)
+            [t, ~, G, ~] = self.event_waveforms();
+            dt = convert_units(t(2:end) - t(1:end-1), 'us', 's');
+            G = convert_units(G(:, 1:end-1), 'mT/m', 'T/m');
+            if exist('option', 'var')
+                switch option
+                    case 'cumulative'
+                        varargout = {cumsum(G.*dt, 2), t(2:end)};
+                    otherwise
+                        error('Unrecognized option')
+                end
+            else
+                varargout = {sum(G.*dt, 2)};
+            end
+        end
 
+        function [ts, rogs] = pathway_readout_times(self, pathways, gradientDim)
+            rogs = self.readOutGroups;
+            [gm, t] = self.gradient_moment('cumulative');
+            gm = gm(gradientDim, :);
+            trMoment = gm(end);
+
+            ts = [];
+            for pwy = pathways
+                [t_inter, ~] = intersections(t, gm, [min(t), max(t)], pwy*abs(trMoment).*[1, 1]);
+                ts = [ts, t_inter(any(t_inter' > rogs(:, 1) & t_inter' < rogs(:, 2), 1))];
+            end
+
+            ts = sort(ts, 2);
+        end
+
+        function [t, B1, G, sampleComb] = event_waveforms(self, startEvent, endEvent, dt_max)
+            %% [t, B1, G, sampleComb] = event_waveforms(self, startEvent, endEvent, dt_max)
+            % Generates waveforms covering the range of events given
+            % 
+            %% 2023-05-24 Samuel Adams-Tew
             if ~exist('startEvent', 'var')
                 startEvent = 1;
             end
             if ~exist('endEvent', 'var')
                 endEvent = self.numEvents;
+            end
+            if ~exist('dt_max', 'var')
+                dt_max = Inf;
             end
 
             B1 = [];
@@ -341,7 +388,7 @@ classdef PulseSequence
 
             for eventNum = startEvent:endEvent
                 % Get waveforms for this event
-                [dt, b1tmp, gtmp, samptmp] = self.get_event(eventNum);
+                [dt, b1tmp, gtmp, samptmp] = self.get_event(eventNum, dt_max);
                 t = [t, self.eventTimes(eventNum) + dt.*(1:length(b1tmp))];
                 B1 = [B1, b1tmp];
                 gradX = [gradX, gtmp(1, :)];
@@ -356,7 +403,24 @@ classdef PulseSequence
             gradZ = [gradZ, 0];
             sampleComb = [sampleComb, 0];
 
-            figure(); plot_sequence(t*1e-3, B1, [gradX; gradY; gradZ], sampleComb);
+            G = [gradX; gradY; gradZ];
+        end
+
+        function plot(self, startEvent, endEvent)
+            %% plot(self, startEvent, endEvent)
+            % Creates a plot of the pulse sequence
+            % 
+            %% 2023-05-22 Samuel Adams-Tew
+            if ~exist('startEvent', 'var')
+                startEvent = 1;
+            end
+            if ~exist('endEvent', 'var')
+                endEvent = self.numEvents;
+            end
+
+            [t, B1, G, sampleComb] = self.event_waveforms(startEvent, endEvent);
+
+            figure(); plot_sequence(t*1e-3, B1, G, sampleComb);
             xlabel('Time (ms)')
         end
     end
@@ -383,6 +447,10 @@ classdef PulseSequence
 
         function numSamples = get.numSamples(self)
             numSamples = sum(self.ADC.numSamples);
+        end
+
+        function readOutGroups = get.readOutGroups(self)
+            readOutGroups = [self.ADC.startTime, self.ADC.endTime];
         end
     end
 
@@ -449,17 +517,24 @@ classdef PulseSequence
             rf = table(startTime, type, FA, duration, phase, endTime);
         end
 
-        function adc = adc_specs(startTime, numSamples, duration)
+        function adc = adc_specs(startTime, samples, duration, option)
             %% adc = adc_specs(startTime, numSamples, duration)
             % Creates a table with values specifying ADC readout events.
             %
             % ~ Input ~
             % * startTime [us]: Beginning of measurement readout window
             % realtive to the beginning of this event block.
-            % * numSamples: Number of samples to collect during the
-            % measurement window. Samples are evenly spaced by
-            % numSamples/duration and centered within the readout window.
+            % * samples [depends on option]: See option below for how this
+            % variable is used for each sample mode.
             % * duration [us]: Length of the readout window.
+            % * option (string): Determines function of samples input.
+            %   * 'numSamples': Number of samples during the readout
+            %   window. Samples are evenly spaced by samples/duration and
+            %   centered within the readout window. numSamples == samples
+            %   * 'sampleTimes': When to collect each sample, relative to
+            %   the start of the measurement window. sampleTimes == samples
+            %   [us]
+            % Default is 'numSamples'.
             %
             % ~ Output ~
             % * adc (table): Table with all specifications required to
@@ -468,12 +543,44 @@ classdef PulseSequence
             %% 2023-05-12 Samuel Adams-Tew
             arguments
                 startTime (:, 1)
-                numSamples (:, 1)
+                samples (:, 1)
                 duration (:, 1)
+                option = 'numSamples'
             end
 
+            switch option
+                case 'numSamples'
+                    % samples input specifies number of samples -> infer
+                    % times
+                    numSamples = samples;
+                    samplePeriod = duration ./ numSamples; % [us]
+                    sampleTime = samplePeriod.*( (1:duration/samplePeriod) - 0.5);
+                case 'sampleTimes'
+                    % Samples imput specifies times for ADC -> infer number
+                    % of samples
+                    sampleTime = samples;
+                    numSamples = size(sampleTime, 2);
+                otherwise
+                    error('Undefined option for creating adc specs');
+            end
             endTime = startTime + round(duration);
-            adc = table(startTime, numSamples, duration, endTime);
+            adc = table(startTime, numSamples, duration, endTime, sampleTime);
         end
     end
+end
+
+function T = common_rate(t)
+% Helper function. Given integer sample times t, finds a sampling period 
+% that will sample each point exactly with the fewest possible samples.
+% Really, this is just finding the greatest common divisor of a set of
+% inputs, rather than the two possible with the matlab gcd function.
+%
+% 2023-06-07 Samuel Adams-Tew
+T = gcd(t(1), t(2));
+if length(t) > 2
+    for idx = 3:length(t)
+        T = gcd(T, t(idx));
+    end
+end
+
 end
