@@ -131,7 +131,7 @@ clear options units
 %% Iterate over all repetitions
 
 % Prepare for multiple iterations, if needed
-if numrepetitions > 1
+if numRepetitions > 1
 
     if exist('ProgressBar', 'class')
         % Show a progress bar, if available
@@ -141,9 +141,11 @@ if numrepetitions > 1
     if saveEvery ~= 1
         % Precompute sequence event operations to accelerate repetitions
         % with no sampling
-        sz = size(T1); sz(1:2) = 3;
+        sz = size(T1map); sz(1:2) = 3;
         eventOp = cell(1, seq.numEvents);
-        seqOp = eye.*ones(sz);
+        eventAdd = cell(1, seq.numEvents);
+        seqOp = eye(3).*ones(sz);
+        seqAdd = [0; 0; 0].*zeros(size(T1map));
         for eventNum = 1:seq.numEvents
             % Get waveforms for this event
             [dt, B1, G, ~] = seq.get_event(eventNum, dt_max, 's');
@@ -152,8 +154,9 @@ if numrepetitions > 1
             B1 = convert_units(B1, 'mT', 'T');
             G = convert_units(G, 'mT/m', 'T/m');
 
-            eventOp{eventNum} = event_operator(dt, B1, G, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map);
+            [eventOp{eventNum}, eventAdd{eventNum}] = event_operator(dt, B1, G, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map);
             seqOp = pagemtimes(eventOp{eventNum}, seqOp);
+            seqAdd = pagemtimes(eventOp{eventNum}, seqAdd) + eventAdd{eventNum};
         end
     end
 end
@@ -170,7 +173,7 @@ for repNum = 1:numRepetitions
 
     if mod(repNum, saveEvery) ~= 0
         % This iteration is not sampled. Perform as single operation.
-        Mloop = pagemtimes(seqOp, Mloop);
+        Mloop = pagemtimes(seqOp, Mloop) + seqAdd;
     else
         % This iteration will be sampled
         samples = zeros([3, seq.numSamples, fieldSize]);
@@ -204,7 +207,7 @@ for repNum = 1:numRepetitions
                 Mloop = Mfinal;
             else
                 % This event is not sampled. Perform as single operation.
-                Mloop = pagemtimes(eventOp{eventNum}, Mloop);
+                Mloop = pagemtimes(eventOp{eventNum}, Mloop) + eventAdd{eventNum};
             end
         end
 
