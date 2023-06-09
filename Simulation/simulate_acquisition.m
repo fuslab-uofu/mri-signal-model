@@ -128,63 +128,103 @@ dt_max = convert_units(options.dt_max, units.dt_units, 's');
 
 clear options units
 
+%% Iterate over all repetitions
+
+% Prepare for multiple iterations, if needed
+if numrepetitions > 1
+
+    if exist('ProgressBar', 'class')
+        % Show a progress bar, if available
+        pb = ProgressBar('Simulating', numRepetitions);
+    end
+    
+    if saveEvery ~= 1
+        % Precompute sequence event operations to accelerate repetitions
+        % with no sampling
+        sz = size(T1); sz(1:2) = 3;
+        eventOp = cell(1, seq.numEvents);
+        seqOp = eye.*ones(sz);
+        for eventNum = 1:seq.numEvents
+            % Get waveforms for this event
+            [dt, B1, G, ~] = seq.get_event(eventNum, dt_max, 's');
+
+            % Convert units
+            B1 = convert_units(B1, 'mT', 'T');
+            G = convert_units(G, 'mT/m', 'T/m');
+
+            eventOp{eventNum} = event_operator(dt, B1, G, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map);
+            seqOp = pagemtimes(eventOp{eventNum}, seqOp);
+        end
+    end
+end
+
 % Create initial magnetization
 Mloop = [zeros([2, 1, fieldSize]); ones([1, 1, fieldSize])];
 
-%% Iterate over all repetitions
-if numRepetitions > 1 && exist('ProgressBar', 'class')
-    pb = ProgressBar('Simulating', numRepetitions);
-end
-
+% Iterate over all repetitions
 for repNum = 1:numRepetitions
     % Update progress bar
     if exist('pb', 'var')
         pb.iter(repNum);
     end
 
-    samples = zeros([3, seq.numSamples, fieldSize]);
-    sampleIdx = 1;
+    if mod(repNum, saveEvery) ~= 0
+        % This iteration is not sampled. Perform as single operation.
+        Mloop = pagemtimes(seqOp, Mloop);
+    else
+        % This iteration will be sampled
+        samples = zeros([3, seq.numSamples, fieldSize]);
+        sampleIdx = 1;
 
-    % Iterate over all events in the pulse sequence
-    for eventNum = 1:seq.numEvents
+        roEvents = seq.readOutEvents;
+        % Iterate over all events in the pulse sequence
+        for eventNum = 1:seq.numEvents
+            if any(roEvents == eventNum)
+                % This event is sampled. Simulate each time point and
+                % sample.
 
-        % Get waveforms for this event
-        [dt, B1, G, sampleComb] = seq.get_event(eventNum, dt_max, 's');
+                % Get waveforms for this event
+                [dt, B1, G, sampleComb] = seq.get_event(eventNum, dt_max, 's');
 
-        % Convert units
-        B1 = convert_units(B1, 'mT', 'T');
-        G = convert_units(G, 'mT/m', 'T/m');
+                % Convert units
+                B1 = convert_units(B1, 'mT', 'T');
+                G = convert_units(G, 'mT/m', 'T/m');
 
-        % Use symmetric splitting solver to simulate Bloch equations
-        [Mfinal, Msample] = bloch_symmetric_splitting(dt, B1, G, pos, T1map, T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, "Minit", Mloop, "sampleComb", sampleComb);
+                % Use symmetric splitting solver to simulate Bloch equations
+                [Mfinal, Msample] = bloch_symmetric_splitting(dt, B1, G, pos, T1map, T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, "Minit", Mloop, "sampleComb", sampleComb);
 
-        % Sample ADC
-        if ~isempty(Msample) && mod(repNum, saveEvery) == 0
-            % Add to samples to save out
-            samples(:, sampleIdx:(sampleIdx + size(Msample, 2) - 1), :, :, :) = Msample;
-            sampleIdx = sampleIdx + size(Msample, 2);
+                % Sample ADC
+                if ~isempty(Msample) && mod(repNum, saveEvery) == 0
+                    % Add to samples to save out
+                    samples(:, sampleIdx:(sampleIdx + size(Msample, 2) - 1), :, :, :) = Msample;
+                    sampleIdx = sampleIdx + size(Msample, 2);
+                end
+
+                % Get new Mloop
+                Mloop = Mfinal;
+            else
+                % This event is not sampled. Perform as single operation.
+                Mloop = pagemtimes(eventOp{eventNum}, Mloop);
+            end
         end
 
-        % Get new Mloop
-        Mloop = Mfinal;
-    end
-
-    % Save out sampled data for this repetition
-    if ~isempty(samples) && mod(repNum, saveEvery) == 0
-        switch lastDim
-            % Writing to a matfile requires that the shape of the RHS
-            % exactly matches that of the LHS, which requires the permute
-            % statement included below
-            case 2
-                file.magnetization(:, :, floor(repNum/saveEvery)) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
-            case 3
-                file.magnetization(:, :, floor(repNum/saveEvery), :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
-            case 4
-                file.magnetization(:, :, floor(repNum/saveEvery), :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
-            case 5
-                file.magnetization(:, :, floor(repNum/saveEvery), :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
-            case 6
-                file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+        % Save out sampled data for this repetition
+        if ~isempty(samples)
+            switch lastDim
+                % Writing to a matfile requires that the shape of the RHS
+                % exactly matches that of the LHS, which requires the permute
+                % statement included below
+                case 2
+                    file.magnetization(:, :, floor(repNum/saveEvery)) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 3
+                    file.magnetization(:, :, floor(repNum/saveEvery), :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 4
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 5
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 6
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+            end
         end
     end
 end

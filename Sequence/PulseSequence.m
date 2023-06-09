@@ -126,6 +126,9 @@ classdef PulseSequence
 
         % readOutGroups - The start and end times for each readout event
         readOutGroups
+
+        % readOutEvents - Which events are readout events
+        readOutEvents
     end
 
     methods
@@ -451,6 +454,12 @@ classdef PulseSequence
 
         function readOutGroups = get.readOutGroups(self)
             readOutGroups = [self.ADC.startTime, self.ADC.endTime];
+        end
+
+        function readOutEvents = get.readOutEvents(self)
+            readOutEvents = ...
+                find(any(self.eventTimes(1:end-1) >= self.ADC.startTime' ...
+                & self.eventTimes(2:end) <= self.ADC.endTime', 2));
         end
     end
 
