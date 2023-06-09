@@ -53,7 +53,7 @@ for xidx = 1:length(Nxs)
     % Establish position based on number of samples
     Nx = Nxs(xidx); % Number of samples along x
     dx = xmax/Nx; % Sample spacing
-    x = dx*(0:Nx-1);
+    x = dx*(-Nx/2:Nx/2-1);
     y = zeros(size(x));
     z = zeros(size(x));
     
