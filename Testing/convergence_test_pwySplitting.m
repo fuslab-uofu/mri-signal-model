@@ -11,8 +11,8 @@
 %
 % 2023-06-07 Samuel Adams-Tew
 
-[file, pth] = uiputfile('*.mat', 'Select a location to save test files', 'mpme_fixedT1.mat');
-savePath = fullfile(pth, file(1:end-4));
+% [file, pth] = uiputfile('*.mat', 'Select a location to save test files', 'mpme_fixedT1.mat');
+% savePath = fullfile(pth, file(1:end-4));
 
 Nxs = [16, 32, 64, 128];
 
