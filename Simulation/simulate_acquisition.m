@@ -119,6 +119,10 @@ elseif ~isequal(size(B1map), size(T1map))
     error('delta must have same shape as T1map')
 end
 
+% Constants
+gamma = options.gamma;
+B0 = options.B0;
+
 % Convert units
 T1map = convert_units(T1map, units.T1_units, 's');
 T2map = convert_units(T2map, units.T2_units, 's');
@@ -163,7 +167,7 @@ for eventNum = 1:seq.numEvents
     B1 = convert_units(B1, 'mT', 'T');
     G = convert_units(G, 'mT/m', 'T/m');
 
-    [eventOp{eventNum}, eventAdd{eventNum}] = event_operator(dt, B1, G, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, 'sampleComb', sampleComb);
+    [eventOp{eventNum}, eventAdd{eventNum}] = event_operator(dt, B1, G, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, 'sampleComb', sampleComb, 'gamma', gamma, 'B0', B0);
     % If multiple TRs, speed up by computing operator for full TR
     if numRepetitions > 1 && saveEvery ~= 1
         if any(sampleComb)
