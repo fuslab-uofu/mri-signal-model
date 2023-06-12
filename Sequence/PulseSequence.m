@@ -14,6 +14,10 @@ classdef PulseSequence
     %
     % ~ Instance methods ~
     % [dt, B1, G, sampleComb] = get_event(self, eventNum, dt_max, dtUnits)
+    % varargout = gradient_moment(self, option)
+    % [ts, rogs] = pathway_readout_times(self, pathways, gradientDim)
+    % [t, B1, G, sampleComb] = event_waveforms(self, startEvent, endEvent, dt_max)
+    % plot(self, startEvent, endEvent)
     %
     % ~ Static methods ~
     % grad = gradient_specs(startTime, amplitude, rampUpTime, duration, rampDownTime)
@@ -126,6 +130,9 @@ classdef PulseSequence
 
         % readOutGroups - The start and end times for each readout event
         readOutGroups
+
+        % readOutEvents - Which events are readout events
+        readOutEvents
     end
 
     methods
@@ -164,7 +171,7 @@ classdef PulseSequence
 
         %% Instance methods
         function [dt, B1, G, sampleComb] = get_event(self, eventNum, dt_max, dtUnits)
-            %% [dt, B1, G, sampleComb] = get_event(self, eventNum, dt_max, dtUnits)
+            %% [dt, B1, G, sampleComb] = get_event(eventNum, dt_max, dtUnits)
             % Generates waveforms and simulation parameters for the
             % requested event
             %
@@ -334,6 +341,18 @@ classdef PulseSequence
         end
 
         function varargout = gradient_moment(self, option)
+            %% varargout = gradient_moment(option)
+            % Computes the zeroth moment of each gradient for this
+            % sequence. 
+            %
+            % ~ Options ~
+            % * No option: Returns the total gradient moment over the
+            % sequence
+            % * 'cumulative': Returns the total moment accumulated up to
+            % that point in the TR
+            %
+            % 2023-06-12 Samuel Adams-Tew
+
             [t, ~, G, ~] = self.event_waveforms();
             dt = convert_units(t(2:end) - t(1:end-1), 'us', 's');
             G = convert_units(G(:, 1:end-1), 'mT/m', 'T/m');
@@ -350,6 +369,23 @@ classdef PulseSequence
         end
 
         function [ts, rogs] = pathway_readout_times(self, pathways, gradientDim)
+            %% [ts, rogs] = pathway_readout_times(pathways, gradientDim)
+            % For unbalanced sequences, computes the times when each phase
+            % coherence pathway / configuration state becomes coherent,
+            % based on the total gradient moment and the accumulation of
+            % de/rephasing during each TR.
+            %
+            % ~ Inputs ~
+            % * pathways: Vector with the integer pathway numbers desired
+            % to be sampled.
+            % * gradientDim: The dimension of unbalanced gradient to
+            % compute times for.
+            %
+            % ~ Output ~ 
+            % * ts: Time from the start of the TR at which coherence occurs
+            % * rogs: The readout group corresponding to coherence time
+            %
+            %% 2023-06-12 Samuel Adams-Tew
             rogs = self.readOutGroups;
             [gm, t] = self.gradient_moment('cumulative');
             gm = gm(gradientDim, :);
@@ -407,7 +443,7 @@ classdef PulseSequence
         end
 
         function plot(self, startEvent, endEvent)
-            %% plot(self, startEvent, endEvent)
+            %% plot(startEvent, endEvent)
             % Creates a plot of the pulse sequence
             % 
             %% 2023-05-22 Samuel Adams-Tew
@@ -451,6 +487,12 @@ classdef PulseSequence
 
         function readOutGroups = get.readOutGroups(self)
             readOutGroups = [self.ADC.startTime, self.ADC.endTime];
+        end
+
+        function readOutEvents = get.readOutEvents(self)
+            readOutEvents = ...
+                find(any(self.eventTimes(1:end-1) >= self.ADC.startTime' ...
+                & self.eventTimes(2:end) <= self.ADC.endTime', 2));
         end
     end
 

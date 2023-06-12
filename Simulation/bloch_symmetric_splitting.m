@@ -15,9 +15,9 @@ function [Mfinal, Msample] = bloch_symmetric_splitting(dt, B1, grad, x, T1, T2, 
 % * grad (3,T): Gradient field waveforms along x-, y-, and z-axes
 %
 % Spatially-varying inputs
-% NOTE: [X] denotes up to 4 dimensions, enabling
-% the manipulation of collections that have up to 4 independent variables,
-% such as full 3D plus varying degrees of frequency shift.
+% NOTE: [X] denotes up to 4 dimensions, enabling the manipulation of
+% collections that have up to 4 independent variables, such as full 3D plus
+% varying degrees of frequency shift.
 % * x (3,1,[X]): Spatial coordinates for each point
 % * T1 (1,1,[X]): Longitudinal relaxation time for each point
 % * T2 (1,1,[X]): Transverse relaxation time for each point
@@ -56,7 +56,7 @@ function [Mfinal, Msample] = bloch_symmetric_splitting(dt, B1, grad, x, T1, T2, 
 % ~ Output ~
 % * Mfinal (3,1,[X]): The last simulation state for each point in space
 % * Msample (3,S,[X]): Intermediate simulation states for each point in
-% space. Empty unless sampleComb or samplePeriod are defined.
+% space. Empty unless samplePeriod is defined or any(sampleComb).
 %
 %% 2023-05-15 Samuel Adams-Tew
 arguments
@@ -210,7 +210,7 @@ for iter = 1:length(B1)
     end
 end
 
-% Return the final simulatin state
+% Return the final simulation state
 Mfinal = Mloop;
 
 end

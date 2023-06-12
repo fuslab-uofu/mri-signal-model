@@ -14,7 +14,6 @@
 [file, pth] = uiputfile('*.mat', 'Select a location to save test files', 'mpme_fixedT1.mat');
 savePath = fullfile(pth, file(1:end-4));
 
-% Note that each one takes 30-40 minutes on a fast computer
 Nxs = [16, 32, 64, 128];
 
 seq = PulseSequence(PulseSequence.rf_specs(0, {'hard'}, 15, 320, 0), ...
@@ -119,19 +118,19 @@ for xidx = 1:length(Nxs)
     file = load(sprintf("%s_Nx=%d_compiled.mat", savePath, Nx));
 
     for pwyIdx = 1:4
-        figure(pwyIdx)
+        figure(pwyIdx + 1)
         plot(file.FAs, abs(file.im(1, :, pwyIdx, ech))); hold on
     end
     leg = [leg, sprintf("Nx=%d", Nx)];
 end
 
-figure(1); title('|F_{+1}|')
-figure(2); title('|F_{0}|')
-figure(3); title('|F_{-1}|')
-figure(4); title('|F_{-2}|')
+figure(2); title('|F_{+1}|')
+figure(3); title('|F_{0}|')
+figure(4); title('|F_{-1}|')
+figure(5); title('|F_{-2}|')
 
 for pwyIdx = 1:4
-    figure(pwyIdx);
+    figure(pwyIdx + 1);
     xlabel('FA (\circ)'); ylabel('Signal')
     grid on; hold off
     legend(leg, 'Location','southeast')
