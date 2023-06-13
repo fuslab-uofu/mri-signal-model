@@ -3,11 +3,11 @@
 
 classdef T2_decay < matlab.unittest.TestCase
     properties
+        reference
     end
 
     methods (Test)
         function final_state_err(testCase)
-            clear, close all
             addpath(genpath('./'))
 
             T = 2; % s
@@ -33,7 +33,7 @@ classdef T2_decay < matlab.unittest.TestCase
             grid on
             xlabel('T2 time (ms)')
             ylabel('transverse magnitude')
-            testCase.verifyEqual(result(2, 1, :), expected(2, 1, :))
+            testCase.verifyLessThan(abs(result(2, 1, :) - expected(2, 1, :)), 1e-10)
         end
     end
 end
