@@ -54,10 +54,6 @@ switch distribution
     case 'Lorentzian'
         T2p = convert_units(options.T2prime, options.T2_units, 's');
         weight = 2*T2p ./ ( (2*pi*T2p.*f).^2 + 1 );
-
-        if any(max(f)*T2p < 2)
-            warning('Maximum frequency max(f) is not large enough to accurately model T2prime=%g ms', options.T2prime)
-        end
     otherwise
         error('Unknown distribution for creating off-resonance ensemble')
 end

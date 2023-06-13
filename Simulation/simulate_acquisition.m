@@ -62,7 +62,7 @@ arguments
     options.delta (1,1,:,:,:) = 0;
     options.B0 (1,1) = 3;
     options.gamma (1,1) = 267.5153151e6;
-    options.showProgressBar = false;
+    options.showProgressBar (1,1) logical = false;
     units.T1_units = 'ms'
     units.T2_units = 'ms'
     units.pos_units = 'mm'
@@ -130,19 +130,11 @@ pos = convert_units(pos, units.pos_units, 'm');
 dt_max = convert_units(options.dt_max, units.dt_units, 's');
 
 % Progress bar option
-showpb = options.showProgressBar && numRepetitions > 1;
+showpb = options.showProgressBar && numRepetitions > 1 && exist('ProgressBar', 'class');
 
 clear options units
 
 %% Prepare for multiple iterations, if needed
-if showpb
-    if exist('ProgressBar', 'class')
-        % Show a progress bar, if available
-        pb = ProgressBar('Simulating', numRepetitions);
-    else
-        showpb = false; % Progress bar not available, do not update later
-    end
-end
 
 % Compute sequence event operations to accelerate repetitions with no
 % sampling
@@ -158,8 +150,12 @@ end
 
 %% Compute operators for events in the sequence
 
+if showpb; pb = ProgressBar('Computing operators', seq.numEvents); end
+
 % Iterate over all events in the sequence
 for eventNum = 1:seq.numEvents
+    if showpb; pb.iter(); end
+
     % Get waveforms for this event
     [dt, B1, G, sampleComb] = seq.get_event(eventNum, dt_max, 's');
 
@@ -182,8 +178,11 @@ for eventNum = 1:seq.numEvents
         end
     end
 end
+if showpb; pb.close(); end
 
 %% Iterate over all repetitions
+
+if showpb; pb = ProgressBar('Simulating repetition', numRepetitions); end
 
 % Create initial magnetization
 Mloop = [zeros([2, 1, fieldSize]); ones([1, 1, fieldSize])];
