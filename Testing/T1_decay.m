@@ -21,7 +21,7 @@ classdef T1_decay < matlab.unittest.TestCase
             T1 = 100:100:1100*ones(sz);
             T2 = 50*ones(sz);
             Min = [0; 1; 0];
-            expected = permute([zeros(1, 11); exp(-T*1./T2); ones(1, 11)-exp(-T./T1)], [1, 3, 2]); %analytical solution
+            expected = permute([zeros(1, 11); exp(-T*1./T2); ones(1, 11)-exp(-T*1./T1)], [1, 3, 2]); %analytical solution
 
             [result, ~] = bloch_symmetric_splitting(dt, B1, grad, pos, T1, T2, Minit = Min); %computed solution
             
@@ -51,7 +51,7 @@ classdef T1_decay < matlab.unittest.TestCase
             T1 = 100:100:1100*ones(sz);
             T2 = 50*ones(sz);
             Min = [0; 0; -1];
-            expected = permute([zeros(1, 11); exp(-T*1./T2); ones(1, 11)-exp(-T./T1) -exp(-T./T1)], [1, 3, 2]); %analytical solution
+            expected = permute([zeros(1, 11); exp(-T*1./T2); ones(1, 11)-2*exp(-T./T1)], [1, 3, 2]); %analytical solution
 
             [result, ~] = bloch_symmetric_splitting(dt, B1, grad, pos, T1, T2, Minit = Min); %computed solution
             
