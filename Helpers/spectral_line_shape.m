@@ -37,11 +37,13 @@ arguments
     options.T2prime = 200
     options.T2_units = 'ms'
     options.normalize = true
+    options.spectAxis
 end
 
-% Determine what axis f varies along, sets the axis for spectroscopic line
-% shape / distribution
-spectAxis = find(size(f) == length(f));
+if ~isfield(options, 'spectAxis')
+    % Default to last dimension
+    options.spectAxis = ndims(f);
+end
 
 if isfield(options, 'T2star') && isfield(options, 'T2')
     % Compute T2prime from given T2 and T2star values
@@ -60,7 +62,7 @@ end
 
 if options.normalize
     % Normalize to have unit area
-    weight = weight./sum(weight, spectAxis);
+    weight = weight./sum(weight, options.spectAxis);
 end
 
 end

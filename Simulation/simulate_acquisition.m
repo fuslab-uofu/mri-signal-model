@@ -49,17 +49,17 @@ function simulate_acquisition(T1map, T2map, pos, seq, options, units)
 %
 %% 2023-05-22 Samuel Adams-Tew
 arguments
-    T1map (1,1,:,:,:)
-    T2map (1,1,:,:,:)
-    pos (3,1,:,:,:)
+    T1map (1,1,:,:,:,:,:)
+    T2map (1,1,:,:,:,:,:)
+    pos (3,1,:,:,:,:,:)
     seq PulseSequence
     options.numRepetitions (1, 1) = 1;
     options.saveEvery (1, 1) = -1;
     options.savePath = './mrsim.mat';
     options.dt_max (1, 1) double {mustBePositive} = Inf
-    options.B1map (1,1,:,:,:) = 1;
-    options.B0map (1,1,:,:,:) = 0;
-    options.delta (1,1,:,:,:) = 0;
+    options.B1map (1,1,:,:,:,:,:) = 1;
+    options.B0map (1,1,:,:,:,:,:) = 0;
+    options.delta (1,1,:,:,:,:,:) = 0;
     options.B0 (1,1) = 3;
     options.gamma (1,1) = 267.5153151e6;
     options.showProgressBar (1,1) logical = false;
@@ -70,33 +70,19 @@ arguments
     units.B0map_units = 'uT'
 end
 
+%% Parse and validate inputs
+
 % Extent of the object being simulated 
-fieldSize = size(pos, 3:6);
+fieldSize = size(pos, 3:7);
 lastDim = 2 + find(fieldSize > 1, 1, 'last'); % Find the last non-singleton dimension
 if isempty(lastDim); lastDim = 2; end
 
-% Check save parameters
-numRepetitions = options.numRepetitions;
-saveEvery = options.saveEvery;
-if saveEvery == -1
-    saveEvery = numRepetitions;
-elseif saveEvery < 1
-    error('Provided value saveEvery=%d is not allowed. Must be at least 1.', saveEvery)
-elseif saveEvery > numRepetitions
-    error('Provided value saveEvery=%d is not allowed. Must be less than numRepetitions=%d.', saveEvery, numRepetitions)
+if ~isequal(size(T1map), size(T2map))
+    error('T1map and T2map must have same shape')
 end
-% Initialize save file
-if ~isempty(options.savePath)
-    save(options.savePath, 'T1map', 'T2map', 'pos', 'seq', 'options', 'units', '-v7.3')
-    file = matfile(options.savePath, 'Writable', true);
-    % Initialize the last element in the array to force file system to
-    % prepare to accomodate the full data size
-    file.magnetization(3, seq.numSamples, floor(numRepetitions/saveEvery), ...
-        fieldSize(1), fieldSize(2), fieldSize(3), fieldSize(4)) = double(0);
+if ~isequal(size(T1map, 3:7), size(pos, 3:7))
+    error('T1map and position must have same field size')
 end
-
-%% Parse and validate inputs
-
 % Check that the frequency offset is the same size as spatial inputs
 delta = options.delta;
 if length(delta) == 1
@@ -123,6 +109,26 @@ end
 gamma = options.gamma;
 B0 = options.B0;
 
+% Check save parameters
+numRepetitions = options.numRepetitions;
+saveEvery = options.saveEvery;
+if saveEvery == -1
+    saveEvery = numRepetitions;
+elseif saveEvery < 1
+    error('Provided value saveEvery=%d is not allowed. Must be at least 1.', saveEvery)
+elseif saveEvery > numRepetitions
+    error('Provided value saveEvery=%d is not allowed. Must be less than numRepetitions=%d.', saveEvery, numRepetitions)
+end
+% Initialize save file
+if ~isempty(options.savePath)
+    save(options.savePath, 'T1map', 'T2map', 'pos', 'seq', 'options', 'units', '-v7.3')
+    file = matfile(options.savePath, 'Writable', true);
+    % Initialize the last element in the array to force file system to
+    % prepare to accomodate the full data size
+    file.magnetization(3, seq.numSamples, floor(numRepetitions/saveEvery), ...
+        fieldSize(1), fieldSize(2), fieldSize(3), fieldSize(4), fieldSize(5)) = double(0);
+end
+
 % Convert units
 T1map = convert_units(T1map, units.T1_units, 's');
 T2map = convert_units(T2map, units.T2_units, 's');
@@ -130,9 +136,11 @@ pos = convert_units(pos, units.pos_units, 'm');
 dt_max = convert_units(options.dt_max, units.dt_units, 's');
 
 % Progress bar option
-showpb = options.showProgressBar && numRepetitions > 1 && exist('ProgressBar', 'class');
+showpb = options.showProgressBar && exist('ProgressBar', 'class');
 
 clear options units
+% Start timing
+tstart = tic();
 
 %% Prepare for multiple iterations, if needed
 
@@ -163,7 +171,7 @@ for eventNum = 1:seq.numEvents
     B1 = convert_units(B1, 'mT', 'T');
     G = convert_units(G, 'mT/m', 'T/m');
 
-    [eventOp{eventNum}, eventAdd{eventNum}] = event_operator(dt, B1, G, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, 'sampleComb', sampleComb, 'gamma', gamma, 'B0', B0);
+    [eventOp{eventNum}, eventAdd{eventNum}] = event_operator(dt, B1, G, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, 'sampleComb', sampleComb, 'gamma', gamma, 'B0', B0, 'showProgressBar', showpb);
     % If multiple TRs, speed up by computing operator for full TR
     if numRepetitions > 1 && saveEvery ~= 1
         if any(sampleComb)
@@ -238,6 +246,12 @@ for repNum = 1:numRepetitions
                     file.magnetization(:, :, floor(repNum/saveEvery), :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
                 case 6
                     file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 7
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 8
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 9
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
             end
         end
     end
@@ -245,5 +259,6 @@ end
 
 % Close progress bar
 if showpb; pb.close(); end
+file.telapsed = toc(tstart); % Record how long the simulation took
 
 end

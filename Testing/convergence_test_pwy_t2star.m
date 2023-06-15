@@ -5,7 +5,7 @@ savePath = fullfile(pth, file(1:end-4));
 
 % Testing parameters
 Nxs = 128;
-Nfs = [128, 192]; %, 256, 320];
+Nfs = [511, 512, 1023, 1024];
 T2p = 200; % T2' [ms]
 
 TR = 20; % Repetition time [ms]
@@ -15,7 +15,7 @@ T2s = 100; % [ms] Observed transverse relaxation time
 
 % 10*T2/TR repetitions to reach steady state
 % Add one, readout after steady state
-nRep = ceil(10*T2/TR) + 1;
+nRep = 200; % ceil(10*T2/TR) + 1;
 Tmax = nRep*TR;
 T2 = 1/(1/T2s - 1/T2p);
 
@@ -55,7 +55,7 @@ for fidx = 1:length(Nfs)
     % Create spectral line with specified number of samples 
     f = df*(-(Nf-1)/2:(Nf-1)/2); % Evenly spaced, centered about zero
     f = permute(f, [1, 3, 4, 2]); % delta varies along dim4
-    weight = spectral_line_shape(f, 'T2prime', T2p);
+    weight = spectral_line_shape(f, 'T2prime', T2p, 'spectAxis', 4);
     % Convert f to delta in ppm
     delta = 2*pi*f./(gamma*B0)*1e6;
 
@@ -84,7 +84,7 @@ for fidx = 1:length(Nfs)
             seq.RF.FA(1) = FAs(idx); % Update the flip angle
             tmppath = sprintf("%s_FA=%.1f_Nf=%d_Nx=%d.mat", savePath, FAs(idx), Nf, Nx);
             
-            simulate_acquisition(T1tmp, T2tmp, pos, seq, 'numRepetitions', nRep, 'savePath', tmppath, 'pos_units', 'm');
+            simulate_acquisition(T1tmp, T2tmp, pos, seq, 'delta', deltatmp, 'numRepetitions', nRep, 'savePath', tmppath, 'pos_units', 'm');
             
             % Load simulation data and combine dimensions to give T2* and
             % phase coherence pathway signals
@@ -118,9 +118,8 @@ for fidx = 1:length(Nfs)
 end
 
 %%
-Nfs = [320, 256, 192, 128];
+Nfs = flip([127, 128, 255, 256, 511, 512, 1023, 1024]);
 ech = 1; leg = {};
-styles = {'-', '--', '-.', ':'};
 for fidx = 1:length(Nfs)
     Nf = Nfs(fidx);
     for xidx = 1:length(Nxs)
@@ -129,7 +128,7 @@ for fidx = 1:length(Nfs)
         
         for pwyIdx = 1:4
             figure(pwyIdx + 1)
-            plot(file.FAs, abs(file.im(1, :, pwyIdx, ech)), styles{fidx}); hold on
+            plot(file.FAs, abs(file.im(1, :, pwyIdx, ech))); hold on
         end
         leg = [leg, sprintf("Nf=%d, Nx=%d", Nf, Nx)];
     end

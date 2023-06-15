@@ -18,6 +18,8 @@ function [A, b] = event_operator(dt, B1, grad, options)
 % operators that give the magnetization state at each sample time as well
 % as the final state. Otherwise, [A, b] are tensor fields for a single
 % operation that applies the full event to get the final state.
+% * showProgressBar (logical): Whether a progress bar indicating progress
+% in computing operator should be displayed. Default is false.
 %
 % Spatially-varying optional inputs. 
 % NOTE: [X] denotes up to 4 dimensions, enabling the manipulation of
@@ -56,6 +58,7 @@ arguments
     options.Meq (1,1,:,:,:,:) {mustBeNumeric, mustBeReal} = 1;
     options.B0 (1,1) {mustBeNumeric, mustBeReal} = 3;
     options.gamma (1,1) {mustBeNumeric, mustBeReal} = 267.5153151e6;
+    options.showProgressBar (1,1) logical = false;
 end
 %% Parse inputs
 % Check that the input waveforms have the same number of samples
@@ -111,6 +114,9 @@ end
 gamma = options.gamma;
 B0 = options.B0;
 
+% Progress bar option
+showpb = options.showProgressBar && exist('ProgressBar', 'class');
+
 clear options
 
 %% Initialize variables 
@@ -129,9 +135,12 @@ bLoop = [0; 0; 0].*ones(size(T1)); % Vector addition
 %% Iterate over event steps, compute operator field
 
 nIter = length(B1);
+if showpb; pb = ProgressBar('Event operator iteration', nIter); end
 saveNum = 1; % Index into sampleIter, (saveNum - 1) is how many values have been saved
 % Loop over each step of the event
 for iter = 1:nIter
+    if showpb; pb.iter(); end
+
     % Compute axis of rotation
     axX = (1 + delta).*real(B1(iter)*B1map);
     axY = (1 + delta).*imag(B1(iter)*B1map);
@@ -154,6 +163,7 @@ for iter = 1:nIter
         saveNum = min(saveNum + 1, length(sampleIter)); % Update save count
     end
 end
+if showpb; pb.close(); end
 
 if isempty(sampleIter)
     % Return operator for final state
