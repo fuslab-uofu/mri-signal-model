@@ -140,7 +140,6 @@ saveNum = 1; % Index into sampleIter, (saveNum - 1) is how many values have been
 % Loop over each step of the event
 for iter = 1:nIter
     if showpb; pb.iter(); end
-
     % Compute axis of rotation
     axX = (1 + delta).*real(B1(iter)*B1map);
     axY = (1 + delta).*imag(B1(iter)*B1map);

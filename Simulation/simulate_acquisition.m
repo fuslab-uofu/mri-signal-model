@@ -159,11 +159,9 @@ end
 %% Compute operators for events in the sequence
 
 if showpb; pb = ProgressBar('Computing operators', seq.numEvents); end
-
 % Iterate over all events in the sequence
 for eventNum = 1:seq.numEvents
     if showpb; pb.iter(); end
-
     % Get waveforms for this event
     [dt, B1, G, sampleComb] = seq.get_event(eventNum, dt_max, 's');
 
@@ -186,6 +184,7 @@ for eventNum = 1:seq.numEvents
         end
     end
 end
+
 if showpb; pb.close(); end
 
 %% Iterate over all repetitions
