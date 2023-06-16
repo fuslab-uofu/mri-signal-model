@@ -37,11 +37,13 @@ arguments
     options.T2prime = 200
     options.T2_units = 'ms'
     options.normalize = true
+    options.spectAxis
 end
 
-% Determine what axis f varies along, sets the axis for spectroscopic line
-% shape / distribution
-spectAxis = find(size(f) == length(f));
+if ~isfield(options, 'spectAxis')
+    % Default to last dimension
+    options.spectAxis = ndims(f);
+end
 
 if isfield(options, 'T2star') && isfield(options, 'T2')
     % Compute T2prime from given T2 and T2star values
@@ -54,17 +56,13 @@ switch distribution
     case 'Lorentzian'
         T2p = convert_units(options.T2prime, options.T2_units, 's');
         weight = 2*T2p ./ ( (2*pi*T2p.*f).^2 + 1 );
-
-        if any(max(f)*T2p < 2)
-            warning('Maximum frequency max(f) is not large enough to accurately model T2prime=%g ms', options.T2prime)
-        end
     otherwise
         error('Unknown distribution for creating off-resonance ensemble')
 end
 
 if options.normalize
     % Normalize to have unit area
-    weight = weight./sum(weight, spectAxis);
+    weight = weight./sum(weight, options.spectAxis);
 end
 
 end

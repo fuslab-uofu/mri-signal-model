@@ -52,7 +52,7 @@ for xidx = 1:length(Nxs)
     % Establish position based on number of samples
     Nx = Nxs(xidx); % Number of samples along x
     dx = xmax/Nx; % Sample spacing
-    x = dx*(0:Nx-1);
+    x = dx*(-Nx/2:Nx/2-1);
     y = zeros(size(x));
     z = zeros(size(x));
     
@@ -124,10 +124,10 @@ for xidx = 1:length(Nxs)
     leg = [leg, sprintf("Nx=%d", Nx)];
 end
 
-figure(2); title('|F_{+1}|')
-figure(3); title('|F_{0}|')
-figure(4); title('|F_{-1}|')
-figure(5); title('|F_{-2}|')
+figure(2); title('|F_{+1}|'); xlim([1, 45]);
+figure(3); title('|F_{0}|'); xlim([1, 45]);
+figure(4); title('|F_{-1}|'); xlim([1, 45]);
+figure(5); title('|F_{-2}|'); xlim([1, 45]);
 
 for pwyIdx = 1:4
     figure(pwyIdx + 1);
