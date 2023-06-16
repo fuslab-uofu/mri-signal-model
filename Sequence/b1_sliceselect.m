@@ -44,6 +44,9 @@ switch options.t_units
     case 'ms'
         T = T*1e-3;
         dt = dt*1e-3;
+    case 'us'
+        T = T*1e-6;
+        dt = dt*1e-6;
     case 's' % do nothing
     otherwise
         error('Unrecognized units for t: %s', options.t_units)
@@ -88,6 +91,8 @@ end
 switch options.t_units
     case 'ms'
         t = t*1e3;
+    case 'us'
+        t = t*1e6;
     case 's' % do nothing
     otherwise
         error('Unrecognized units for t: %s', options.t_units)
