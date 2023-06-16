@@ -14,6 +14,8 @@ lims = [min(t), max(t)];
 
 if nargin == 3
     nplot = 4;
+elseif nargin == 4 && ~any(sampleComb)
+    nplot = 4;
 elseif nargin == 4 && any(sampleComb)
     nplot = 5;
 else

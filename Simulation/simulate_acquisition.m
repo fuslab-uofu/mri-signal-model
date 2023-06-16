@@ -162,17 +162,11 @@ if showpb; pb = ProgressBar('Computing operators', seq.numEvents); end
 % Iterate over all events in the sequence
 for eventNum = 1:seq.numEvents
     if showpb; pb.iter(); end
-    % Get waveforms for this event
-    [dt, B1, G, sampleComb] = seq.get_event(eventNum, dt_max, 's');
 
-    % Convert units
-    B1 = convert_units(B1, 'mT', 'T');
-    G = convert_units(G, 'mT/m', 'T/m');
-
-    [eventOp{eventNum}, eventAdd{eventNum}] = event_operator(dt, B1, G, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, 'sampleComb', sampleComb, 'gamma', gamma, 'B0', B0, 'showProgressBar', showpb);
+    [eventOp{eventNum}, eventAdd{eventNum}] = seq.get_event_operator(eventNum, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, 'gamma', gamma, 'B0', B0, 'showProgressBar', showpb);
     % If multiple TRs, speed up by computing operator for full TR
     if numRepetitions > 1 && saveEvery ~= 1
-        if any(sampleComb)
+        if iscell(eventOp{eventNum})
             % Event is sampled and has intermediate operators. Use the
             % operator for the final state.
             seqOp = pagemtimes(eventOp{eventNum}{end}, seqOp);
