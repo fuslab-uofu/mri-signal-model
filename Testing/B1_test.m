@@ -11,8 +11,6 @@ classdef B1_test < matlab.unittest.TestCase
         function diff_FA(testCase)
             addpath(genpath('./'));
             
-            Gz = 30;
-            dz = 5;
             T = 2; % s
             z = -5:5;
             sz = size(z);
@@ -23,12 +21,12 @@ classdef B1_test < matlab.unittest.TestCase
             grad = zeros(3, ceil(T/dt));
             T1 = inf*ones(sz);
             T2 = inf*ones(sz);
+            Minit = [0, 0, 1];
 
-            for FA=1:90
-                [B1e, ~] = b1_sliceselect(Gz, dz, FA, T, dt);
-                
-                [result, ~] = bloch_symmetric_splitting(dt, B1e, grad, pos, T1, T2); %computed solution
-                expected = permute([zeros(1, 11); exp(-T*1./T2); ones(1, 11)-exp(-T./T1)], [1, 3, 2]); %analytical solution
+            for FA=10:90
+                [B1e, ~] = b1_hardpulse(FA, T, dt);
+                [result, ~] = bloch_symmetric_splitting(dt, B1e, grad, pos, T1, T2, Minit=Minit); %computed solution
+                expected = [1 0 0; 0 cos(-FA*pi/180) -sin(-FA*pi/180); 0 sin(-FA*pi/180) cos(-FA*pi/180)]*[0;0;1]; %analytical solution
                 testCase.verifyLessThan(abs(result(3, 1, :) - expected(3, 1, :)), 1e-10);
             end
             
@@ -59,8 +57,8 @@ classdef B1_test < matlab.unittest.TestCase
             grad = zeros(3, ceil(T/dt));
             T1 = inf*ones(sz);
             T2 = inf*ones(sz);
-            [B1e, ~] = b1_sliceselect(Gz, dz, 90, T, dt);
-            B1map = .9001:.0001:1.1;
+            [B1e, ~] = b1_hardpulse(30, T, dt);
+            B1map = .9:.02:1.1;
             
             [result, ~] = bloch_symmetric_splitting(dt, B1e, grad, pos, T1, T2, B1map=B1map); %computed solution
             expected = permute([zeros(1, 11); exp(-T*1./T2); ones(1, 11)-exp(-T./T1)], [1, 3, 2]); %analytical solution
