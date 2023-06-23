@@ -1,4 +1,4 @@
-%% Unit Test that compares simulated T2 decay to an analytical solution
+% Unit Test that compares simulated T2 decay to an analytical solution
 %test bloch_sym on 11 different T2 values with no B1 or gradient field
 
 classdef T2_decay < matlab.unittest.TestCase
@@ -7,7 +7,7 @@ classdef T2_decay < matlab.unittest.TestCase
 
     methods (Test)
         function final_state_err(testCase)
-            addpath(genpath('./'))
+            addpath(genpath('./'));
 
             T = 2; % s
             z = -5:5;
