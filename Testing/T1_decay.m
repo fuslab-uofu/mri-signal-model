@@ -1,5 +1,7 @@
-%% Unit Test that compares simulated T1 decay to an analytical solution
-%test bloch_sym on 11 different T1 values with no B1 or gradient field
+%% Unit Test that compares simulated T1 decay to an analytical solution for the function bloch_symmetric_splitting
+% test bloch_sym on 11 different T1 values with no B1 or gradient field
+%% 2023-06-26 Addison Powell
+
 classdef T1_decay < matlab.unittest.TestCase
     properties 
         reference

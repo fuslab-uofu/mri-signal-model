@@ -1,5 +1,6 @@
-% Unit Test that compares simulated T2 decay to an analytical solution
-%test bloch_sym on 11 different T2 values with no B1 or gradient field
+%% Unit Test that compares simulated T2 decay to an analytical solution for the function bloch_symmetric_splitting
+% test bloch_sym on 11 different T2 values with no B1 or gradient field
+%% 2023-06-26 Addison Powell
 
 classdef T2_decay < matlab.unittest.TestCase
     properties
