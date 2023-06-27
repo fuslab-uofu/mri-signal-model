@@ -100,7 +100,7 @@ classdef B1_test < matlab.unittest.TestCase
             addpath(genpath('./'));
         
             T = 2; % s
-            z = 0;1
+            z = 0;
             sz = size(z);
             dt = 1e-3; % ms
             pos = permute([zeros(size(z))
@@ -115,7 +115,8 @@ classdef B1_test < matlab.unittest.TestCase
             for PA=1:90
                 [B1e, ~] = b1_hardpulse(90+PA*1i, T, dt, t_units='s', B1_units='T'); %calculated by hand that B1 is correct for 10deg 2s 1ms
                 [result, ~] = bloch_symmetric_splitting(dt, B1e, grad, pos, T1, T2, Minit=Minit); %computed solution
-                expected = [1 0 0; 0 cos(-(FA+PA*1i)) -sin(-(FA+PA*1i)); 0 sin(-(FA+PA*1i)) cos(-(FA+PA*1i))]*Minit; %analytical solution rotates clockwise
+                expected = [cos(-(PA)) 0 -sin(-(PA)); 0 1 0; sin(-(PA)) 0 cos(-(PA))]*Minit;
+                expected = [1 0 0; 0 cos(-(FA)) -sin(-(FA)); 0 sin(-(FA)) cos(-(FA))]*expected;  %analytical solution rotates clockwise
                 testCase.verifyLessThan(abs(result - expected), 1e-10);
             end
         end

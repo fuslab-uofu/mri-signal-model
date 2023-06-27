@@ -21,13 +21,14 @@ classdef off_resonance_test < matlab.unittest.TestCase
             grad = zeros(3, ceil(T/dt));
             T1 = inf*ones(sz);
             T2 = inf*ones(sz);
-            Min = [0; 0; 1];
             [B1e, ~] = b1_hardpulse(90, T, dt, t_units='s', B1_units='T');
+            [B1, ~] = b1_sliceselect(30, 5, 90, T, dt, 2.6752e8, t_units='s', B1e_units='T', FA_units='deg');
 
-            for ppm=1:20
+
+            for ppm=.1:.2:3
                 expected = (1+ppm*3e-6)*[1 0 0; 0 cos(-pi/2) -sin(-pi/2); 0 sin(-pi/2) cos(-pi/2)]*[0; 0; 1]; %analytical solution
     
-                [result, ~] = bloch_symmetric_splitting(dt, B1e, grad, pos, T1, T2, delta=ppm, Minit=[0; 0; 1]); %computed solution
+                [result, ~] = bloch_symmetric_splitting(dt, B1e, grad, pos, T1, T2, delta=ppm); %computed solution
                 testCase.verifyLessThan(abs(result - expected), 1e-10);
             end
             
