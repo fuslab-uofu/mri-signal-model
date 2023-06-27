@@ -47,23 +47,22 @@ function simulate_acquisition(T1map, T2map, pos, seq, options, units)
 % seq (samples along dim=2, with S=seq.numSamples). Each repetition of the
 % sequence is along dim=3 (R=numRepetitions).
 %
-% TODO: T2star, B0drift
-%
 %% 2023-05-22 Samuel Adams-Tew
 arguments
-    T1map (1,1,:,:,:)
-    T2map (1,1,:,:,:)
-    pos (3,1,:,:,:)
+    T1map (1,1,:,:,:,:,:)
+    T2map (1,1,:,:,:,:,:)
+    pos (3,1,:,:,:,:,:)
     seq PulseSequence
     options.numRepetitions (1, 1) = 1;
     options.saveEvery (1, 1) = -1;
     options.savePath = './mrsim.mat';
     options.dt_max (1, 1) double {mustBePositive} = Inf
-    options.B1map (1,1,:,:,:) = 1;
-    options.B0map (1,1,:,:,:) = 0;
-    options.delta (1,1,:,:,:) = 0;
+    options.B1map (1,1,:,:,:,:,:) = 1;
+    options.B0map (1,1,:,:,:,:,:) = 0;
+    options.delta (1,1,:,:,:,:,:) = 0;
     options.B0 (1,1) = 3;
     options.gamma (1,1) = 267.5153151e6;
+    options.showProgressBar (1,1) logical = false;
     units.T1_units = 'ms'
     units.T2_units = 'ms'
     units.pos_units = 'mm'
@@ -71,33 +70,19 @@ arguments
     units.B0map_units = 'uT'
 end
 
+%% Parse and validate inputs
+
 % Extent of the object being simulated 
-fieldSize = size(pos, 3:6);
+fieldSize = size(pos, 3:7);
 lastDim = 2 + find(fieldSize > 1, 1, 'last'); % Find the last non-singleton dimension
 if isempty(lastDim); lastDim = 2; end
 
-% Check save parameters
-numRepetitions = options.numRepetitions;
-saveEvery = options.saveEvery;
-if saveEvery == -1
-    saveEvery = numRepetitions;
-elseif saveEvery < 1
-    error('Provided value saveEvery=%d is not allowed. Must be at least 1.', saveEvery)
-elseif saveEvery > numRepetitions
-    error('Provided value saveEvery=%d is not allowed. Must be less than numRepetitions=%d.', saveEvery, numRepetitions)
+if ~isequal(size(T1map), size(T2map))
+    error('T1map and T2map must have same shape')
 end
-% Initialize save file
-if ~isempty(options.savePath)
-    save(options.savePath, 'T1map', 'T2map', 'pos', 'seq', 'options', 'units', '-v7.3')
-    file = matfile(options.savePath, 'Writable', true);
-    % Initialize the last element in the array to force file system to
-    % prepare to accomodate the full data size
-    file.magnetization(3, seq.numSamples, floor(numRepetitions/saveEvery), ...
-        fieldSize(1), fieldSize(2), fieldSize(3), fieldSize(4)) = double(0);
+if ~isequal(size(T1map, 3:7), size(pos, 3:7))
+    error('T1map and position must have same field size')
 end
-
-%% Parse and validate inputs
-
 % Check that the frequency offset is the same size as spatial inputs
 delta = options.delta;
 if length(delta) == 1
@@ -120,78 +105,153 @@ elseif ~isequal(size(B1map), size(T1map))
     error('delta must have same shape as T1map')
 end
 
+% Constants
+gamma = options.gamma;
+B0 = options.B0;
+
+% Check save parameters
+numRepetitions = options.numRepetitions;
+saveEvery = options.saveEvery;
+if saveEvery == -1
+    saveEvery = numRepetitions;
+elseif saveEvery < 1
+    error('Provided value saveEvery=%d is not allowed. Must be at least 1.', saveEvery)
+elseif saveEvery > numRepetitions
+    error('Provided value saveEvery=%d is not allowed. Must be less than numRepetitions=%d.', saveEvery, numRepetitions)
+end
+% Initialize save file
+if ~isempty(options.savePath)
+    save(options.savePath, 'T1map', 'T2map', 'pos', 'seq', 'options', 'units', '-v7.3')
+    file = matfile(options.savePath, 'Writable', true);
+    % Initialize the last element in the array to force file system to
+    % prepare to accomodate the full data size
+    file.magnetization(3, seq.numSamples, floor(numRepetitions/saveEvery), ...
+        fieldSize(1), fieldSize(2), fieldSize(3), fieldSize(4), fieldSize(5)) = double(0);
+end
+
 % Convert units
 T1map = convert_units(T1map, units.T1_units, 's');
 T2map = convert_units(T2map, units.T2_units, 's');
 pos = convert_units(pos, units.pos_units, 'm');
 dt_max = convert_units(options.dt_max, units.dt_units, 's');
 
+% Progress bar option
+showpb = options.showProgressBar && exist('ProgressBar', 'class');
+
 clear options units
+% Start timing
+tstart = tic();
+
+%% Prepare for multiple iterations, if needed
+
+% Compute sequence event operations to accelerate repetitions with no
+% sampling
+sz = size(T1map); sz(1:2) = 3;
+eventOp = cell(1, seq.numEvents);
+eventAdd = cell(1, seq.numEvents);
+if numRepetitions > 1 && saveEvery ~= 1
+    % If there are repetitions without sampling, we can accelerate by
+    % precomputing an operator for the full sequence
+    seqOp = eye(3).*ones(sz);
+    seqAdd = [0; 0; 0].*zeros(size(T1map));
+end
+
+%% Compute operators for events in the sequence
+
+if showpb; pb = ProgressBar('Computing operators', seq.numEvents); end
+% Iterate over all events in the sequence
+for eventNum = 1:seq.numEvents
+    if showpb; pb.iter(); end
+
+    [eventOp{eventNum}, eventAdd{eventNum}] = seq.get_event_operator(eventNum, 'pos', pos, 'T1', T1map, 'T2', T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, 'gamma', gamma, 'B0', B0, 'showProgressBar', showpb);
+    % If multiple TRs, speed up by computing operator for full TR
+    if numRepetitions > 1 && saveEvery ~= 1
+        if iscell(eventOp{eventNum})
+            % Event is sampled and has intermediate operators. Use the
+            % operator for the final state.
+            seqOp = pagemtimes(eventOp{eventNum}{end}, seqOp);
+            seqAdd = pagemtimes(eventOp{eventNum}{end}, seqAdd) + eventAdd{eventNum}{end};
+        else
+            % Event has no intermediate operators
+            seqOp = pagemtimes(eventOp{eventNum}, seqOp);
+            seqAdd = pagemtimes(eventOp{eventNum}, seqAdd) + eventAdd{eventNum};
+        end
+    end
+end
+
+if showpb; pb.close(); end
+
+%% Iterate over all repetitions
+
+if showpb; pb = ProgressBar('Simulating repetition', numRepetitions); end
 
 % Create initial magnetization
 Mloop = [zeros([2, 1, fieldSize]); ones([1, 1, fieldSize])];
 
-%% Iterate over all repetitions
-if numRepetitions > 1 && exist('ProgressBar', 'class')
-    pb = ProgressBar('Simulating', numRepetitions);
-end
-
 for repNum = 1:numRepetitions
     % Update progress bar
-    if exist('pb', 'var')
-        pb.iter(repNum);
-    end
+    if showpb; pb.iter(repNum); end
 
-    samples = zeros([3, seq.numSamples, fieldSize]);
-    sampleIdx = 1;
+    if mod(repNum, saveEvery) ~= 0
+        % This iteration is not sampled. Perform as single operation.
+        Mloop = pagemtimes(seqOp, Mloop) + seqAdd;
+    else
+        % This iteration will be sampled. Perform each event separately
+        samples = zeros([3, seq.numSamples, fieldSize]);
+        
+        repSampIdx = 0; % Index counting samples saved for this repetition
+        roEvents = seq.readOutEvents;
+        % Iterate over all events in the pulse sequence
+        for eventNum = 1:seq.numEvents
+            if any(roEvents == eventNum)
+                % This event is sampled. Use individual operators for each
+                % sample.
+                nEventSamples = length(eventOp{eventNum}) - 1;
+                for eventSampIdx = 1:nEventSamples
+                    samples(:, repSampIdx + eventSampIdx,:,:,:) = ...
+                        pagemtimes(eventOp{eventNum}{eventSampIdx}, Mloop) + eventAdd{eventNum}{eventSampIdx};
+                end
 
-    % Iterate over all events in the pulse sequence
-    for eventNum = 1:seq.numEvents
+                % Update count of samples for this index
+                repSampIdx = repSampIdx + nEventSamples;
 
-        % Get waveforms for this event
-        [dt, B1, G, sampleComb] = seq.get_event(eventNum, dt_max, 's');
-
-        % Convert units
-        B1 = convert_units(B1, 'mT', 'T');
-        G = convert_units(G, 'mT/m', 'T/m');
-
-        % Use symmetric splitting solver to simulate Bloch equations
-        [Mfinal, Msample] = bloch_symmetric_splitting(dt, B1, G, pos, T1map, T2map, 'delta', delta, 'B0map', B0map, 'B1map', B1map, "Minit", Mloop, "sampleComb", sampleComb);
-
-        % Sample ADC
-        if ~isempty(Msample) && mod(repNum, saveEvery) == 0
-            % Add to samples to save out
-            samples(:, sampleIdx:(sampleIdx + size(Msample, 2) - 1), :, :, :) = Msample;
-            sampleIdx = sampleIdx + size(Msample, 2);
+                % Get new Mloop using operator for final state
+                Mloop = pagemtimes(eventOp{eventNum}{end}, Mloop) + eventAdd{eventNum}{end};
+            else
+                % This event is not sampled. Perform as single operation.
+                Mloop = pagemtimes(eventOp{eventNum}, Mloop) + eventAdd{eventNum};
+            end
         end
 
-        % Get new Mloop
-        Mloop = Mfinal;
-    end
-
-    % Save out sampled data for this repetition
-    if ~isempty(samples) && mod(repNum, saveEvery) == 0
-        switch lastDim
-            % Writing to a matfile requires that the shape of the RHS
-            % exactly matches that of the LHS, which requires the permute
-            % statement included below
-            case 2
-                file.magnetization(:, :, floor(repNum/saveEvery)) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
-            case 3
-                file.magnetization(:, :, floor(repNum/saveEvery), :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
-            case 4
-                file.magnetization(:, :, floor(repNum/saveEvery), :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
-            case 5
-                file.magnetization(:, :, floor(repNum/saveEvery), :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
-            case 6
-                file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+        % Save out sampled data for this repetition
+        if ~isempty(samples)
+            switch lastDim
+                % Writing to a matfile requires that the shape of the RHS
+                % exactly matches that of the LHS, which requires the permute
+                % statement included below
+                case 2
+                    file.magnetization(:, :, floor(repNum/saveEvery)) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 3
+                    file.magnetization(:, :, floor(repNum/saveEvery), :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 4
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 5
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 6
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 7
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 8
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+                case 9
+                    file.magnetization(:, :, floor(repNum/saveEvery), :, :, :, :, :, :, :) = permute(samples, [1, 2, lastDim+1, 3:lastDim]);
+            end
         end
     end
 end
 
 % Close progress bar
-if exist('pb', 'var')
-    pb.close();
-end
+if showpb; pb.close(); end
+file.telapsed = toc(tstart); % Record how long the simulation took
 
 end

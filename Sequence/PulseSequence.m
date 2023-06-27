@@ -14,12 +14,16 @@ classdef PulseSequence
     %
     % ~ Instance methods ~
     % [dt, B1, G, sampleComb] = get_event(self, eventNum, dt_max, dtUnits)
+    % varargout = gradient_moment(self, option)
+    % [ts, rogs] = pathway_readout_times(self, pathways, gradientDim)
+    % [t, B1, G, sampleComb] = event_waveforms(self, startEvent, endEvent, dt_max)
+    % plot(self, startEvent, endEvent)
     %
     % ~ Static methods ~
     % grad = gradient_specs(startTime, amplitude, rampUpTime, duration, rampDownTime)
     % rf = rf_specs(startTime, type, FA, duration, phase)
-    % adc = adc_specs(startTime, numSamples, duration)
-    % 
+    % adc = adc_specs(startTime, samples, duration)
+    %
     % Use 'help PulseSequence/<property or method name>' for property and
     % method documentation.
     %
@@ -91,6 +95,10 @@ classdef PulseSequence
         % * duration [us]: Length of the readout window.
         % * endTime [us]: End time relative to beginning of this event
         % block
+        % * sampleTime [us]: When to collect each sample, relative to the
+        % start of each measurement window. Number of columns is the number
+        % of samples, while number of rows must match the number of
+        % specified measurement windows.
         ADC table
 
         % blockDuration - Scalar value defining the total duration of this
@@ -119,6 +127,12 @@ classdef PulseSequence
         % numSamples - The number of ADC readout samples collected during a
         % single repetition of the sequence.
         numSamples
+
+        % readOutGroups - The start and end times for each readout event
+        readOutGroups
+
+        % readOutEvents - Which events are readout events
+        readOutEvents
     end
 
     methods
@@ -151,13 +165,22 @@ classdef PulseSequence
             else
                 self.Gz = Gz;
             end
-            self.ADC = ADC;
-            self.blockDuration = blockDuration;
+            if isempty(ADC)
+                self.ADC = PulseSequence.adc_specs([], [], []);
+            else
+                self.ADC = ADC;
+            end
+            if exist('blockDuration', 'var')
+                self.blockDuration = blockDuration;
+            else
+                self.blockDuration = max([self.RF.endTime; self.Gx.endTime; ...
+                    self.Gy.endTime; self.Gz.endTime; self.ADC.endTime]);
+            end
         end
 
         %% Instance methods
         function [dt, B1, G, sampleComb] = get_event(self, eventNum, dt_max, dtUnits)
-            %% [dt, B1, G, sampleComb] = get_event(self, eventNum, dt_max, dtUnits)
+            %% [dt, B1, G, sampleComb] = get_event(eventNum, dt_max, dtUnits)
             % Generates waveforms and simulation parameters for the
             % requested event
             %
@@ -243,12 +266,19 @@ classdef PulseSequence
             else
                 % Get ADC specs
                 spec = self.ADC(eventADC, :);
-                samplePeriod = dur ./ spec.numSamples; % [us]
                 % Determine when samples should be collected
-                ADCtimes = startTime + samplePeriod*( (1:(dur/samplePeriod)) - 0.5);
+                ADCtimes = spec.startTime + spec.sampleTime;
+
+                % Determine maximum sampling rate allowed by ADC specs
+                samplePeriod = common_rate(round([spec.sampleTime, dur]*10));
+                if samplePeriod == 1
+                    samplePeriod = 1;
+                else
+                    samplePeriod = samplePeriod/10;
+                end
 
                 % Compute an initial sampling rate
-                dt = dur/ceil(2*dur/samplePeriod); % [us]
+                dt = dur/ceil(dur/samplePeriod); % [us]
                 % Require that dt <= dt_max
                 if dt > dt_max
                     dt = dt/ceil(dt/dt_max);
@@ -258,7 +288,7 @@ classdef PulseSequence
                 t = startTime:dt:endTime; % [us] Closed interval
                 t = t(1:end-1); % [startTime, endTime)
 
-                % Find times t closest to sample times 
+                % Find times t closest to sample times
                 % (necessary due to rounding)
                 [~, idx] = min(abs(t' - ADCtimes));
                 % Create sampling comb
@@ -267,22 +297,6 @@ classdef PulseSequence
             end
 
             % Initialize magnetization components
-            if isempty(eventRF)
-                B1 = zeros(size(t)); % No RF event
-            else
-                % Specs for this RF event
-                % Start time, type, FA [deg], duration, end time
-                spec = self.RF(eventRF, :);
-                % Generate waveform of specified type
-                if isequal(spec.type{1}, 'hard')
-                    [B1, t_B1] = b1_hardpulse(spec.FA, spec.duration, dt, 't_units', 'us');
-                    t_B1 = t_B1 + spec.startTime;
-                    % Apply specified phase
-                    B1 = B1 * exp(1i*180/pi * spec.phase);
-                end
-                % Choose only interval covered by this event
-                B1 = B1(t_B1 >= startTime & t_B1 < endTime);
-            end
             if isempty(eventGx)
                 gradX = zeros(size(t)); % No Gx event
             else
@@ -315,21 +329,225 @@ classdef PulseSequence
             end
             G = [gradX; gradY; gradZ];
 
+            if isempty(eventRF)
+                B1 = zeros(size(t)); % No RF event
+            else
+                % Specs for this RF event
+                % Start time, type, FA [deg], duration, end time
+                spec = self.RF(eventRF, :);
+                % Generate waveform of specified type
+                switch spec.type{1}
+                    case 'hard'
+                        [B1, t_B1] = b1_hardpulse(spec.FA, spec.duration, dt, 't_units', 'us');
+                        t_B1 = t_B1 + spec.startTime;
+                        % Apply specified phase
+                        B1 = B1 * exp(1i*180/pi * spec.phase);
+                    case 'sinc'
+                        % Assume that the peak gradient amplitude is the
+                        % slice select amplitude
+                        Gss = max(sqrt(sum(G.*G)));
+                        [B1, t_B1] = b1_sliceselect(Gss, spec.dz, spec.FA, spec.duration, dt, 't_units', 'us');
+                        t_B1 = t_B1 + spec.startTime;
+                        % Apply specified phase
+                        B1 = B1 * exp(1i*180/pi * spec.phase);
+                        % Modulate with frequency offset for slice position
+                        B1 = B1 * exp(267.5153151e6*(spec.zoffset*1e-3)*Gss);
+                end
+                % Choose only interval covered by this event
+                B1 = B1(t_B1 >= startTime & t_B1 < endTime);
+            end
+
             % Convert time base to desired units
             if ~isequal(dtUnits, 'us'); dt = convert_units(dt, 'us', dtUnits); end
         end
 
-        function plot(self, startEvent, endEvent)
-            %% plot(self)
-            % Creates a plot of the pulse sequence
-            % 
-            %% 2023-05-22 Samuel Adams-Tew
+        function [A, b] = get_event_operator(self, eventNum, options)
+            arguments
+                self
+                eventNum
+                options.T1 (1,1,:,:,:,:) {mustBeNumeric, mustBeReal} = Inf;
+                options.T2 (1,1,:,:,:,:) {mustBeNumeric, mustBeReal} = Inf;
+                options.pos (3,1,:,:,:,:) {mustBeNumeric, mustBeReal} = [0; 0; 1];
+                options.B1map (1,1,:,:,:,:) {mustBeNumeric, mustBeReal} = 1;
+                options.B0map (1,1,:,:,:,:) {mustBeNumeric, mustBeReal} = 0;
+                options.delta (1,1,:,:,:,:) {mustBeNumeric, mustBeReal} = 0;
+                options.Meq (1,1,:,:,:,:) {mustBeNumeric, mustBeReal} = 1;
+                options.B0 (1,1) {mustBeNumeric, mustBeReal} = 3;
+                options.gamma (1,1) {mustBeNumeric, mustBeReal} = 267.5153151e6;
+                options.showProgressBar (1,1) logical = false;
+            end
 
+            %% Parse inputs
+            % Read in spatial variables
+            x = options.pos; T1 = options.T1; T2 = options.T2;
+            % Extent of spatial / independent variables
+            fieldSize = size(x, 3:6);
+            % Check that spatially varying inputs have same number of entries
+            if any(fieldSize ~= [size(T1, 3:6); size(T2, 3:6)], "all")
+                error('Spatially varying inputs (pos, T1, T2) must have same number of independent variables.')
+            end
+            % Check that the frequency offset is the same size as spatial inputs
+            delta = options.delta*1e-6; % convert 1 ppm = 1e-6
+            if length(delta) == 1
+                delta = delta.*ones(size(T1));
+            elseif any(fieldSize ~= size(delta, 3:6))
+                error('delta must have same number of independent variables as pos.')
+            end
+            % Check that B0 inhomogeneity is the same size as spatial inputs
+            B0map = options.B0map;
+            if length(B0map) == 1
+                B0map = B0map.*ones(size(T1)); % Apply same weight to all points
+            elseif any(fieldSize ~= size(B0map, 3:6)) % Validate number of points
+                error('dB0 must have same number of independent variables as pos.')
+            end
+            % Check that B1 inhomogeneity is same size as spatial inputs
+            B1map = options.B1map;
+            if length(B1map) == 1
+                B1map = B1map.*ones(size(T1)); % Apply same weight to all points
+            elseif any(fieldSize ~= size(B1map, 3:6)) % Validate number of points
+                error('dB1 must have same number of independent variables as pos.')
+            end
+            % Check that equilibrium magnetization is same size as spatial inputs
+            Meq = options.Meq;
+            if length(Meq) == 1
+                Meq = Meq.*ones(size(T1)); % Apply same weight to all points
+            elseif any(fieldSize ~= size(Meq, 3:6)) % Validate number of points
+                error('delta must have same number of independent variables as pos.')
+            end
+            % Constants
+            gamma = options.gamma;
+            B0 = options.B0;
+
+            % Progress bar option
+            showpb = options.showProgressBar && exist('ProgressBar', 'class');
+
+            clear options
+
+            [dt, B1, G, sampleComb] = self.get_event(eventNum);
+
+            % Check whether this is a sampled event and validate sampleComb
+            if any(sampleComb)
+                sampleIter = find(sampleComb);
+            else
+                sampleIter = [];
+            end
+
+            % Convert units
+            B1 = convert_units(B1, 'mT', 'T');
+            G = convert_units(G, 'mT/m', 'T/m');
+            dt = convert_units(dt, 'us', 's');
+
+            if any(B1)
+                if isempty(sampleIter)
+                    [A, b] = event_operator(dt, B1, G, 'pos', x, 'T1', T1, 'T2', T2, 'delta', delta*1e6, 'B0map', B0map, 'B1map', B1map, 'sampleComb', sampleComb, 'gamma', gamma, 'B0', B0, 'Meq', Meq, 'showProgressBar', showpb);
+                else
+                    % Assume that we are not sampling during excitation....
+                    % Throw error
+                    error('Not implemented: Cannot sample during excitation.')
+                end
+            else
+                t = dt*(1:length(B1));
+                grad = cumsum(G*dt, 2)./t;
+
+                if isempty(sampleIter)
+                    Bz = delta*B0 + (1 + delta).*(B0map + sum(grad(:, end).*x));
+                    Rot = zrot(-gamma*Bz*t(end));
+                    [Rel, b] = relaxation(t(end), T1, T2, Meq);
+                    A = Rel.*Rot;
+                else
+                    A = cell(1, length(sampleIter) + 1);
+                    b = cell(1, length(sampleIter) + 1);
+                    saveNum = 1;
+                    for iter = sampleIter
+                        Bz = delta*B0 + (1 + delta).*(B0map + sum(grad(:, iter).*x));
+                        Rot = zrot(-gamma*Bz*t(iter));
+                        [Rel, b{saveNum}] = relaxation(t(iter), T1, T2, Meq);
+                        A{saveNum} = Rel.*Rot;
+
+                        saveNum = saveNum + 1;
+                    end
+
+                    Bz = delta*B0 + (1 + delta).*(B0map + sum(grad(:, end).*x));
+                    Rot = zrot(-gamma*Bz*t(end));
+                    [Rel, b{end}] = relaxation(t(end), T1, T2, Meq);
+                    A{end} = Rel.*Rot;
+                end
+            end
+        end
+
+        function varargout = gradient_moment(self, option)
+            %% varargout = gradient_moment(option)
+            % Computes the zeroth moment of each gradient for this
+            % sequence.
+            %
+            % ~ Options ~
+            % * No option: Returns the total gradient moment over the
+            % sequence
+            % * 'cumulative': Returns the total moment accumulated up to
+            % that point in the TR
+            %
+            % 2023-06-12 Samuel Adams-Tew
+
+            [t, ~, G, ~] = self.event_waveforms();
+            dt = convert_units(t(2:end) - t(1:end-1), 'us', 's');
+            G = convert_units(G(:, 1:end-1), 'mT/m', 'T/m');
+            if exist('option', 'var')
+                switch option
+                    case 'cumulative'
+                        varargout = {cumsum(G.*dt, 2), t(2:end)};
+                    otherwise
+                        error('Unrecognized option')
+                end
+            else
+                varargout = {sum(G.*dt, 2)};
+            end
+        end
+
+        function [ts, rogs] = pathway_readout_times(self, pathways, gradientDim)
+            %% [ts, rogs] = pathway_readout_times(pathways, gradientDim)
+            % For unbalanced sequences, computes the times when each phase
+            % coherence pathway / configuration state becomes coherent,
+            % based on the total gradient moment and the accumulation of
+            % de/rephasing during each TR.
+            %
+            % ~ Inputs ~
+            % * pathways: Vector with the integer pathway numbers desired
+            % to be sampled.
+            % * gradientDim: The dimension of unbalanced gradient to
+            % compute times for.
+            %
+            % ~ Output ~
+            % * ts: Time from the start of the TR at which coherence occurs
+            % * rogs: The readout group corresponding to coherence time
+            %
+            %% 2023-06-12 Samuel Adams-Tew
+            rogs = self.readOutGroups;
+            [gm, t] = self.gradient_moment('cumulative');
+            gm = gm(gradientDim, :);
+            trMoment = gm(end);
+
+            ts = [];
+            for pwy = pathways
+                [t_inter, ~] = intersections(t, gm, [min(t), max(t)], pwy*abs(trMoment).*[1, 1]);
+                ts = [ts, t_inter(any(t_inter' > rogs(:, 1) & t_inter' < rogs(:, 2), 1))];
+            end
+
+            ts = sort(ts, 2);
+        end
+
+        function [t, B1, G, sampleComb] = event_waveforms(self, startEvent, endEvent, dt_max)
+            %% [t, B1, G, sampleComb] = event_waveforms(self, startEvent, endEvent, dt_max)
+            % Generates waveforms covering the range of events given
+            %
+            %% 2023-05-24 Samuel Adams-Tew
             if ~exist('startEvent', 'var')
                 startEvent = 1;
             end
             if ~exist('endEvent', 'var')
                 endEvent = self.numEvents;
+            end
+            if ~exist('dt_max', 'var')
+                dt_max = Inf;
             end
 
             B1 = [];
@@ -341,7 +559,7 @@ classdef PulseSequence
 
             for eventNum = startEvent:endEvent
                 % Get waveforms for this event
-                [dt, b1tmp, gtmp, samptmp] = self.get_event(eventNum);
+                [dt, b1tmp, gtmp, samptmp] = self.get_event(eventNum, dt_max);
                 t = [t, self.eventTimes(eventNum) + dt.*(1:length(b1tmp))];
                 B1 = [B1, b1tmp];
                 gradX = [gradX, gtmp(1, :)];
@@ -356,7 +574,24 @@ classdef PulseSequence
             gradZ = [gradZ, 0];
             sampleComb = [sampleComb, 0];
 
-            figure(); plot_sequence(t*1e-3, B1, [gradX; gradY; gradZ], sampleComb);
+            G = [gradX; gradY; gradZ];
+        end
+
+        function plot(self, startEvent, endEvent)
+            %% plot(startEvent, endEvent)
+            % Creates a plot of the pulse sequence
+            %
+            %% 2023-05-22 Samuel Adams-Tew
+            if ~exist('startEvent', 'var')
+                startEvent = 1;
+            end
+            if ~exist('endEvent', 'var')
+                endEvent = self.numEvents;
+            end
+
+            [t, B1, G, sampleComb] = self.event_waveforms(startEvent, endEvent);
+
+            figure(); plot_sequence(t*1e-3, B1, G, sampleComb);
             xlabel('Time (ms)')
         end
     end
@@ -383,6 +618,16 @@ classdef PulseSequence
 
         function numSamples = get.numSamples(self)
             numSamples = sum(self.ADC.numSamples);
+        end
+
+        function readOutGroups = get.readOutGroups(self)
+            readOutGroups = [self.ADC.startTime, self.ADC.endTime];
+        end
+
+        function readOutEvents = get.readOutEvents(self)
+            readOutEvents = ...
+                find(any(self.eventTimes(1:end-1) >= self.ADC.startTime' ...
+                & self.eventTimes(2:end) <= self.ADC.endTime', 2));
         end
     end
 
@@ -419,7 +664,7 @@ classdef PulseSequence
             grad = table(startTime, amplitude, rampUpTime, duration, rampDownTime, endTime);
         end
 
-        function rf = rf_specs(startTime, type, FA, duration, phase)
+        function rf = rf_specs(startTime, type, FA, duration, phase, dz, zoffset)
             %% rf = rf_specs(startTime, type, FA, duration, phase)
             % Creates a table with values specifying RF excitations.
             %
@@ -442,24 +687,42 @@ classdef PulseSequence
                 type (:, 1)
                 FA (:, 1)
                 duration (:, 1)
-                phase (:, 1)
+                phase (:, 1) = []
+                dz (:, 1) = []
+                zoffset (:, 1) = []
+            end
+            if isempty(phase)
+                phase = zeros(size(startTime));
+            end
+            if isempty(dz)
+                dz = zeros(size(startTime));
+            end
+            if isempty(zoffset)
+                zoffset = zeros(size(startTime));
             end
 
             endTime = startTime + duration;
-            rf = table(startTime, type, FA, duration, phase, endTime);
+            rf = table(startTime, type, FA, duration, phase, endTime, dz, zoffset);
         end
 
-        function adc = adc_specs(startTime, numSamples, duration)
+        function adc = adc_specs(startTime, samples, duration, option)
             %% adc = adc_specs(startTime, numSamples, duration)
             % Creates a table with values specifying ADC readout events.
             %
             % ~ Input ~
             % * startTime [us]: Beginning of measurement readout window
             % realtive to the beginning of this event block.
-            % * numSamples: Number of samples to collect during the
-            % measurement window. Samples are evenly spaced by
-            % numSamples/duration and centered within the readout window.
+            % * samples [depends on option]: See option below for how this
+            % variable is used for each sample mode.
             % * duration [us]: Length of the readout window.
+            % * option (string): Determines function of samples input.
+            %   * 'numSamples': Number of samples during the readout
+            %   window. Samples are evenly spaced by samples/duration and
+            %   centered within the readout window. numSamples == samples
+            %   * 'sampleTimes': When to collect each sample, relative to
+            %   the start of the measurement window. sampleTimes == samples
+            %   [us]
+            % Default is 'numSamples'.
             %
             % ~ Output ~
             % * adc (table): Table with all specifications required to
@@ -468,12 +731,49 @@ classdef PulseSequence
             %% 2023-05-12 Samuel Adams-Tew
             arguments
                 startTime (:, 1)
-                numSamples (:, 1)
+                samples (:, 1)
                 duration (:, 1)
+                option = 'numSamples'
             end
 
+            if isempty(samples)
+                numSamples = [];
+                sampleTime = [];
+            else
+                switch option
+                    case 'numSamples'
+                        % samples input specifies number of samples -> infer
+                        % times
+                        numSamples = samples;
+                        samplePeriod = duration ./ numSamples; % [us]
+                        sampleTime = samplePeriod.*( (1:duration/samplePeriod) - 0.5);
+                    case 'sampleTimes'
+                        % Samples imput specifies times for ADC -> infer number
+                        % of samples
+                        sampleTime = samples;
+                        numSamples = size(sampleTime, 2);
+                    otherwise
+                        error('Undefined option for creating adc specs');
+                end
+            end
             endTime = startTime + round(duration);
-            adc = table(startTime, numSamples, duration, endTime);
+            adc = table(startTime, numSamples, duration, endTime, sampleTime);
         end
     end
+end
+
+function T = common_rate(t)
+% Helper function. Given integer sample times t, finds a sampling period
+% that will sample each point exactly with the fewest possible samples.
+% Really, this is just finding the greatest common divisor of a set of
+% inputs, rather than the two possible with the matlab gcd function.
+%
+% 2023-06-07 Samuel Adams-Tew
+T = gcd(t(1), t(2));
+if length(t) > 2
+    for idx = 3:length(t)
+        T = gcd(T, t(idx));
+    end
+end
+
 end
