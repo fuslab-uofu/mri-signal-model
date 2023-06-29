@@ -25,12 +25,13 @@ classdef gradient_test < matlab.unittest.TestCase
             grad = [grad, tmp];
             B1 = zeros(1, length(grad));
             grad = [zeros(2, length(grad)); grad];
+            zerograd = zeros(size(grad));
             Mloop = [0;1;0];
             
 
             for iter=length(B1)
                 tmp = sum(grad(3, iter).*pos);
-                Mloop = [cos(-pi/2) -sin(-pi/2) 0; sin(-pi/2) cos(-pi/2) 0; 0 0 1]*Mloop %not rotating
+                Mloop = [cos(-pi/2) -sin(-pi/2) 0; sin(-pi/2) cos(-pi/2) 0; 0 0 1]*Mloop; %not rotating
             end
            
             expected = [1 0 0; 0 cos(-pi/2) -sin(-pi/2); 0 sin(-pi/2) cos(-pi/2)]*[0; 1; 0]; %analytical solution
