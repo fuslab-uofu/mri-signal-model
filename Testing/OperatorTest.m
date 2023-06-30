@@ -44,6 +44,8 @@ classdef OperatorTest < matlab.unittest.TestCase
             [dt, ~, B1, grad, pos, delta, T1, T2, dB0, B1map, M0] = sssetup();
             T1 = 600*T1; T2 = 100*T2;
             delta = reshape(linspace(-50, 50, length(delta)), size(delta));
+            grad = zeros(size(grad));
+            pos = zeros(size(pos));
 
             % Symmetric splitting simulation
             [Msim, ~] = bloch_symmetric_splitting(dt*1e-3, B1*1e-3, grad*1e-3, pos*1e-3, T1*1e-3, T2*1e-3, delta=delta, B0map=dB0, B1map=B1map, Meq=M0);
