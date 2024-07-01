@@ -20,7 +20,7 @@ on:
     inputs:
       matlab:
         description: >-
-          MATLAB release to set up (R2022b or later) # (R2020a or later, R2021a or later for Windows)
+          MATLAB release to set up (R2020a or later, R2021a or later for Windows)
         required: false
         default: latest
       runner:

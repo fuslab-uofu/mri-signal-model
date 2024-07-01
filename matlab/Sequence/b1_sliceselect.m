@@ -99,3 +99,9 @@ switch options.t_units
 end
 
 end
+
+function y = sinc(x)
+% Defined locally; redundant if signal processing toolbox is installed
+y = sin(pi*x)./(pi*x);
+y(x == 0) = 1;
+end
