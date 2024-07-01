@@ -1,0 +1,67 @@
+# This is a basic workflow to help you get started with Actions
+
+name: run-tests
+
+# Controls when the workflow will run
+on:
+  workflow_call:
+    inputs:
+      matlab:
+        required: false
+        type: string
+        default: R2021a
+      runner:
+        required: false
+        type: string
+        default: ubuntu-latest
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      matlab:
+        description: >-
+          MATLAB release to set up (R2020a or later, R2021a or later for Windows)
+        required: false
+        default: latest
+      runner:
+        required: false
+        default: ubuntu-latest
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  matlab-tests:
+    # The type of runner that the job will run on
+    runs-on: ${{ inputs.runner }}
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      # Sets up MATLAB on the GitHub Actions runner
+      - name: Setup MATLAB
+        uses: matlab-actions/setup-matlab@v1
+        with:
+          release: ${{ inputs.matlab }}
+
+      # Runs a set of commands using the runners shell
+      - name: Run all tests
+        uses: matlab-actions/run-tests@v1
+        with:
+          source-folder: matlab
+          test-results-junit: matlab-${{inputs.matlab}}_${{inputs.runner}}_results.xml
+          code-coverage-cobertura: matlab-${{inputs.matlab}}_${{inputs.runner}}_coverage.xml
+          
+      - name: Upload code coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage_matlab-${{inputs.matlab}}_${{inputs.runner}}
+          path: matlab-${{inputs.matlab}}_${{inputs.runner}}_coverage.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results_matlab-${{inputs.matlab}}_${{inputs.runner}}
+          path: matlab-${{inputs.matlab}}_${{inputs.runner}}_results.xml

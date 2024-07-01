@@ -34,6 +34,9 @@ classdef ProgressBar < handle
         isTimeRemainingEnabled
         currIter % Current iteration
         nIter % Total number of iterations
+        % Whether .iter() will be called before a computation is started or
+        % after it is completed
+        iterBefore 
     end
     properties (Access = private)
         w = [] % waitbar handle
@@ -52,7 +55,7 @@ classdef ProgressBar < handle
         end
         function tremain = get.tremain(obj)
             % Get the estimated time remaining in seconds
-            tremain = toc(obj.tstart)/(obj.currIter - 1)*(obj.nIter - obj.currIter + 1);
+            tremain = toc(obj.tstart)/(obj.currIter - obj.iterBefore)*(obj.nIter - obj.currIter + obj.iterBefore);
         end
         %% Setters
         function set.currIter(obj, value)
@@ -98,6 +101,7 @@ classdef ProgressBar < handle
                 options.currIter = 0
                 options.isAppendFractionEnabled = true
                 options.isTimeRemainingEnabled = true
+                options.iterBefore = true;
             end
 
             % Assign values to properties
@@ -106,6 +110,7 @@ classdef ProgressBar < handle
             obj.currIter = options.currIter;
             obj.isAppendFractionEnabled = options.isAppendFractionEnabled;
             obj.isTimeRemainingEnabled = options.isTimeRemainingEnabled;
+            obj.iterBefore = options.iterBefore;
 
             % If the startNow option is set to true, start the progress bar
             if options.startNow

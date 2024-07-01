@@ -1,12 +1,12 @@
 function simulate_acquisition(T1map, T2map, pos, seq, options, units)
 %% simulate_acquisition(T1map, T2map, pos, seq, options, units)
 %
-% ~ Input ~
-% NOTE: [X] denotes up to 3 dimensions, enabling the manipulation of
-% collections that have up to 3 independent variables, such as full 3D.
-% * T1map (1,1,[X]): Longitudinal relaxation time for each point
-% * T2map (1,1,[X]): Transverse relaxation time for each point
-% * pos (3,1,[X]): Spatial coordinates for each point
+% ~ Input ~ NOTE: [X] denotes up to 3 dimensions, enabling the manipulation
+% of collections that have up to 3 independent variables, such as full 3D.
+% * T1map (1,1,[X]) [default ms]: Longitudinal relaxation time for each
+% point
+% * T2map (1,1,[X]) [default ms]: Transverse relaxation time for each point
+% * pos (3,1,[X]) [default mm]: Spatial coordinates for each point
 % * seq (PulseSequence): PulseSequence object that specifies the RF,
 % gradients, and sampling.
 %
@@ -19,12 +19,14 @@ function simulate_acquisition(T1map, T2map, pos, seq, options, units)
 % Default is -1, which saves only the last repetition.
 % * savePath (string): File path where the output should be saved. See
 % output section below for more information on the saved file.
-% * dt_max (scalar): Maximum time step permitted for any part of the
-% simulation. If the provided seq requires that a smaller timestep be used
-% for a particular portion of the simulation, that timestep will be used.
-% If dt_max==Inf, the time specified by seq is always used. Default is Inf.
-% * B0map (1,1,[X]): Spatially varying main field inhomogeneities, applied
-% as an additive factor. Default is 0 for all points.
+% * dt_max (scalar) [default us]: Maximum time step permitted for any part
+% of the simulation. If the provided seq requires that a smaller timestep
+% be used for a particular portion of the simulation, that timestep will be
+% used. If dt_max==Inf, the time specified by seq is always used. Default
+% is Inf.
+% * B0map (1,1,[X]) [default uT]: Spatially varying main field
+% inhomogeneities, applied as an additive factor. Default is 0 for all
+% points.
 % * B1map (1,1,[X]) [scale factor]: Spatially varying B1 field, applied by
 % multiplication with the B1 field at each time. Default is 1 for all
 % points.
@@ -126,7 +128,7 @@ if ~isempty(options.savePath)
     % Initialize the last element in the array to force file system to
     % prepare to accomodate the full data size
     file.magnetization(3, seq.numSamples, floor(numRepetitions/saveEvery), ...
-        fieldSize(1), fieldSize(2), fieldSize(3), fieldSize(4), fieldSize(5)) = double(0);
+        fieldSize(1), fieldSize(2), fieldSize(3), fieldSize(4), fieldSize(5)) = single(0);
 end
 
 % Convert units
@@ -197,7 +199,7 @@ for repNum = 1:numRepetitions
         Mloop = pagemtimes(seqOp, Mloop) + seqAdd;
     else
         % This iteration will be sampled. Perform each event separately
-        samples = zeros([3, seq.numSamples, fieldSize]);
+        samples = zeros([3, seq.numSamples, fieldSize], 'single');
         
         repSampIdx = 0; % Index counting samples saved for this repetition
         roEvents = seq.readOutEvents;

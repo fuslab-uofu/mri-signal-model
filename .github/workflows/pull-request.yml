@@ -1,0 +1,59 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Pull request status checks
+
+# Controls when the workflow will run
+on:
+  # We want to run this workflow on all pull requests
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+#   build:
+#   docs:
+#   linters:
+#   package-linters:
+  run-tests:
+    strategy:
+      fail-fast: true
+      matrix:
+        runner: [ubuntu-latest]
+        matlabversion: [latest, R2023a, R2022a, R2021a]
+        include:
+        # Also check for cross platform compatibility
+        - runner: macos-latest
+          matlabversion: latest
+        - runner: windows-latest
+          matlabversion: latest
+    uses: ./.github/workflows/run-tests.yml
+    with:
+      runner: ${{ matrix.runner }}
+      matlab: ${{ matrix.matlabversion }}
+
+  coverage-report:
+    needs: 
+      - run-tests
+    uses: ./.github/workflows/coverage-report.yml
+    with:
+      matlab: latest
+      runner: ubuntu-latest
+      # Using a repository variable for this means only admins can adjust thresholds
+      thresholds: ${{ vars.COVERAGE_THRESHOLDS }}
+  
+  pull-request-check:
+    needs:
+    - run-tests
+    - coverage-report
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Decide whether the needed jobs succeeded or failed
+      uses: re-actors/alls-green@release/v1
+      with:
+        allowed-failures: comment-ratio  # docs, linters
+        # allowed-skips:
+        jobs: ${{ toJSON(needs) }}
