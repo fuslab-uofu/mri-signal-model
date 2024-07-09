@@ -1,47 +1,65 @@
 function [A, b] = event_operator(dt, B1, grad, options)
-%% [A, b] = event_operator(dt, B1, grad, options)
+%% Compute operators describing magnetization change over time
+%  [A, b] = event_operator(dt, B1, grad, options)
+%
 % Computes the operator for an event step in MR sequence simulation. If the
 % event includes sampling, an operator is created for each sample time
 % point as well as the final simulation state.
 %
-% ~ Input ~
-% * dt (scalar) [s]: Time step between each element of the input waveforms.
-% * B1 (1,T) [T]: Complex valued B1 field values for each time point.
-% * grad (3,T) [T/m]: Gradient field waveforms along x-, y-, and z-axes.
+% Input
+% -----
+% dt : scalar [s]
+%   Time step between each element of the input waveforms.
+% B1 : (1,T) scalar entries [T]
+%   Complex valued B1 field values for each time point.
+% grad : (3,T) [T/m]
+%   Gradient field waveforms along x-, y-, and z-axes.
 %
-% ~ Options ~
-% * gamma (scalar) [rad/(s*T)]: Gyromagnetic ratio for on-resonance
-% excitation. Default is that of water protons, 267.5153151e6.
-% * B0 (scalar) [T]: Main magnetic field strength. Default is 3.
-% * sampleComb (1,T) (logical): Array that indicates which time points
-% should be sampled. If any(sampleComb), [A, b] are cell arrays with
-% operators that give the magnetization state at each sample time as well
-% as the final state. Otherwise, [A, b] are tensor fields for a single
-% operation that applies the full event to get the final state.
-% * showProgressBar (logical): Whether a progress bar indicating progress
-% in computing operator should be displayed. Default is false.
+% Options
+% -------
+% gamma : scalar [rad/(s*T)]
+%   Gyromagnetic ratio for on-resonance excitation. Default is that of 
+%   water protons, 267.5153151e6.
+% B0 : scalar [T]
+%   Main magnetic field strength. Default is 3.
+% sampleComb : (1,T) logical
+%   Array that indicates which time points should be sampled. If 
+%   any(sampleComb), [A, b] are cell arrays with operators that give the 
+%   magnetization state at each sample time as well as the final state. 
+%   Otherwise, [A, b] are tensor fields for a single operation that applies
+%   the full event to get the final state.
+% showProgressBar : logical
+%   Whether a progress bar indicating progress in computing operator should
+%   be displayed. Default is false.
 %
 % Spatially-varying optional inputs. 
-% NOTE: [X] denotes up to 4 dimensions, enabling the manipulation of
-% collections that have up to 4 independent variables, such as full 3D plus
-% varying degrees of frequency shift.
-% * x (3,1,[X]) [m]: Spatial coordinates for each point
-% * T1 (1,1,[X]) [s]: Longitudinal relaxation time for each point
-% * T2 (1,1,[X]) [s]: Transverse relaxation time for each point
-% * B0map (1,1,[X]): Spatially varying main field inhomogeneities, applied
-% as an additive factor. Default is 0 for all points.
-% * B1map (1,1,[X]) [scale factor]: Spatially varying B1 field, applied by
-% multiplication with the B1 field at each time. Default is 1 for all
-% points.
-% * delta (1,1,[X]) [ppm]: Frequency offset / chemical shift. Default is 0
-% for all points.
+%   NOTE: [X] denotes up to 4 dimensions, enabling the manipulation of
+%   collections that have up to 4 independent variables, such as full 3D 
+%   plus varying degrees of frequency shift.
+% x : (3,1,[X]) vector entries [m]
+%   Spatial coordinates for each point
+% T1 : (1,1,[X]) scalar entries [s]
+%   Longitudinal relaxation time for each point
+% T2 : (1,1,[X]) scalar entries [s]
+%   Transverse relaxation time for each point
+% B0map : scalar entries (1,1,[X])
+%   Spatially varying main field inhomogeneities, applied as an additive 
+%   factor. Default is 0 for all points.
+% B1map : (1,1,[X]) scalar entries [scale factor]
+%   Spatially varying B1 field, applied by multiplication with the B1 field 
+%   at each time. Default is 1 for all points.
+% delta : (1,1,[X]) scalar entries [ppm]
+%   Frequency offset / chemical shift. Default is 0 for all points.
 %
-% ~ Output ~
-% * A (3,3,[X]): Tensor field containing the multiplication part of a
-% linear operation applying the excitation, precession, and relaxation for
-% the given sequence waveforms and object properties.
-% * b (3,1,[X]): Vector field containing the bias for relaxation effects
-% during the event.
+% Output
+% ------
+% A : (3,3,[X]) matrix entries
+%   Tensor field containing the multiplication part of a linear operation 
+%   applying the excitation, precession, and relaxation for the given 
+%   sequence waveforms and object properties.
+% b : (3,1,[X]) vector entries
+%   Vector field containing the bias for relaxation effects during the
+%   event.
 %
 %% 2023-06-12 Samuel Adams-Tew
 arguments

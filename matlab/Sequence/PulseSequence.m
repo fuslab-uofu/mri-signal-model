@@ -4,22 +4,26 @@ classdef PulseSequence
     % Note PulseSequence properties and functions expect times to be given
     % in microseconds [us] unless otherwise specified.
     %
-    % ~ Properties ~
+    % Properties
+    % ----------
     % RF, Gx, Gy, Gz, ADC, blockDuration
     % Dependent properties: startTimes, endTimes, eventTimes, numEvents,
     % numSamples
     %
-    % ~ Constructor ~
+    % Constructor
+    % -----------
     % self = PulseSequence(RF, Gx, Gy, Gz, ADC, blockDuration)
     %
-    % ~ Instance methods ~
+    % Instance methods
+    % ----------------
     % [dt, B1, G, sampleComb] = get_event(self, eventNum, dt_max, dtUnits)
     % varargout = gradient_moment(self, option)
     % [ts, rogs] = pathway_readout_times(self, pathways, gradientDim)
     % [t, B1, G, sampleComb] = event_waveforms(self, startEvent, endEvent, dt_max)
     % plot(self, startEvent, endEvent)
     %
-    % ~ Static methods ~
+    % Static methods
+    % --------------
     % grad = gradient_specs(startTime, amplitude, rampUpTime, duration, rampDownTime)
     % rf = rf_specs(startTime, type, FA, duration, phase)
     % adc = adc_specs(startTime, samples, duration)

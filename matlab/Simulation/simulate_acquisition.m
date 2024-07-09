@@ -1,53 +1,69 @@
 function simulate_acquisition(T1map, T2map, pos, seq, options, units)
-%% simulate_acquisition(T1map, T2map, pos, seq, options, units)
+%% Evaluate MR signal model for a defined sequence
+%  simulate_acquisition(T1map, T2map, pos, seq, options, units)
 %
-% ~ Input ~ NOTE: [X] denotes up to 3 dimensions, enabling the manipulation
-% of collections that have up to 3 independent variables, such as full 3D.
-% * T1map (1,1,[X]) [default ms]: Longitudinal relaxation time for each
-% point
-% * T2map (1,1,[X]) [default ms]: Transverse relaxation time for each point
-% * pos (3,1,[X]) [default mm]: Spatial coordinates for each point
-% * seq (PulseSequence): PulseSequence object that specifies the RF,
-% gradients, and sampling.
+% Input
+% -----
+%   NOTE: [X] denotes up to 3 dimensions, enabling the manipulation
+%   of collections that have up to 3 independent variables, such as full 
+%   3D.
+% T1map : (1,1,[X]) scalar entries [default ms]
+%   Longitudinal relaxation time for each point
+% T2map : (1,1,[X]) scalar entries [default ms]
+%   Transverse relaxation time for each point
+% pos : (3,1,[X]) vector entries [default mm]
+%   Spatial coordinates for each point
+% seq : PulseSequence
+%   PulseSequence object that specifies the RF, gradients, and sampling.
 %
-% ~ Options ~
-% * numRepetitions (scalar): Number of times to consecutively simulate the
-% application of seq, which may be required for achieving steady-state
-% condition for some sequences. Default is 1.
-% * saveEvery (scalar): How many repetitions should be completed before
-% saving the result. Also saves every saveEvery subsequent iterations.
-% Default is -1, which saves only the last repetition.
-% * savePath (string): File path where the output should be saved. See
-% output section below for more information on the saved file.
-% * dt_max (scalar) [default us]: Maximum time step permitted for any part
-% of the simulation. If the provided seq requires that a smaller timestep
-% be used for a particular portion of the simulation, that timestep will be
-% used. If dt_max==Inf, the time specified by seq is always used. Default
-% is Inf.
-% * B0map (1,1,[X]) [default uT]: Spatially varying main field
-% inhomogeneities, applied as an additive factor. Default is 0 for all
-% points.
-% * B1map (1,1,[X]) [scale factor]: Spatially varying B1 field, applied by
-% multiplication with the B1 field at each time. Default is 1 for all
-% points.
-% * delta (1,1,[X]) [ppm]: Frequency offset / chemical shift. Default is 0
-% for all points.
-% * B0 (scalar) [T]: Main magnetic field strength. Default is 3.
-% * gamma (scalar) [rad/(s*T)]: Gyromagnetic ratio for on-resonance
-% excitation. Default is that of water protons, 267.5153151e6.
+% Options
+% -------
+% numRepetitions : integer
+%   Number of times to consecutively simulate the application of seq,
+%   which may be required for achieving steady-state condition for some 
+%   sequences. Default is 1.
+% saveEvery : integer
+%   How many repetitions should be completed before saving the result. Also
+%   saves every saveEvery subsequent iterations. Default is -1, which saves 
+%   only the last repetition.
+% savePath : char array
+%   File path where the output should be saved. See output section below 
+%   for more information on the saved file.
+% dt_max : scalar [default us]
+%   Maximum time step permitted for any part of the simulation. If the 
+%   provided `seq` requires that a smaller timestep be used for a 
+%   particular portion of the simulation, that timestep will be used. 
+%   If `isinf(dt_max)`, the time specified by seq is always used. Default 
+%   is Inf.
+% B0map : (1,1,[X]) scalar entries [default uT]
+%   Spatially varying main field inhomogeneities, applied as an additive 
+%   factor. Default is 0 for all points.
+% B1map : (1,1,[X]) scalar entries [scale factor]
+%   Spatially varying B1 field, applied by multiplication with the B1 field
+%   at each time. Default is 1 for all points.
+% delta : (1,1,[X]) scalar entries [ppm]
+%   Frequency offset / chemical shift. Default is 0 for all points.
+% B0 : scalar [T]
+%   Main magnetic field strength. Default is 3.
+% gamma : scalar [rad/(s*T)]
+%   Gyromagnetic ratio for on-resonance excitation. Default is that of 
+%   water protons, 267.5153151e6.
 %
-% ~ Units ~
+% Units
+% -----
 % Use the units options to specify what units are being used for each input
 % variable. Includes T1_units, T2_units, pos_units, dt_units, B0map_units.
 % See CONVERT_UNITS for options.
 %
-% ~ Output ~
-% This function has no returned output. Simulation results are saved to the
-% file specified by savePath. The saved file contains copies of the input
-% parameters with an additional variable M
-% * M (3,S,R,[X]): Magnetization vector at each sample time specified by
-% seq (samples along dim=2, with S=seq.numSamples). Each repetition of the
-% sequence is along dim=3 (R=numRepetitions).
+% Output
+% ------
+%   This function has no returned output. Simulation results are saved to 
+%   the file specified by savePath. The saved file contains copies of the 
+%   input parameters with an additional variable M, described below.
+% M : (3,S,R,[X]) vector entries
+%   Magnetization vector at each sample time specified by `seq`
+%   (samples along dim=2, with S=seq.numSamples). Each repetition of the
+%   sequence is along dim=3 (R=numRepetitions).
 %
 %% 2023-05-22 Samuel Adams-Tew
 arguments

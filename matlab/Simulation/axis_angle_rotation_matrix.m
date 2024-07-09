@@ -1,22 +1,26 @@
 function R = axis_angle_rotation_matrix(ax, ang)
-%% R = axis_angle_rotation_matrix(ax, ang)
-% Generates a rotation matrix by the given angle about the specified axis
+%% Generates a rotation matrix by the given angle about the specified axis
+%  R = axis_angle_rotation_matrix(ax, ang)
 %
-% ~ Input ~
-% * ax: The axis about which to rotate. Expects column vector in R3 or 
-% matrix of column vectors
-% * ang: The angle (in radians) by which to rotate about each specified
-% axis. Expects one entry in ang for every column in ax.
-% ~ Output ~
-% * R: 3x3 rotation matrix by ang radians about axis ax. If input contains
-% multiple rotation axes/column vectors, the corresponding matrix for each
-% rotation is stored in each page (dim3), i.e., R(:, :, 2) is the rotation
-% matrix for the rotation by ang(2) radians about axis ax(:, 2)
+% Input
+% -----
+% ax : vector(s)
+%   The axis about which to rotate. Expects column vector in R3 or matrix 
+%   of column vectors
+% ang : scalar(s)
+%   The angle (in radians) by which to rotate about each specified
+%   axis. Expects one entry in ang for every column in ax.
 %
-% ~ Example ~
-% >> in = [1, 1
-%          0, 0
-%          0, 0];
+% Output
+% ------
+% R : matrix/ces
+%   3x3 rotation matrix by ang radians about axis ax. If input contains 
+%   multiple rotation axes/column vectors, the corresponding matrix for 
+%   each rotation is stored in each page (dim3), i.e., R(:, :, 2) is the 
+%   rotation matrix for the rotation by ang(2) radians about axis ax(:, 2)
+%
+% Example
+% -------
 % >> ax = [0, 0
 %          1, 0
 %          0, 1]; 

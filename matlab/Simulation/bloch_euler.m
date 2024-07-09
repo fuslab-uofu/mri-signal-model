@@ -1,62 +1,80 @@
 function [Mfinal, Msample] = bloch_euler(dt, B1, grad, x, T1, T2, options)
-%% [Mfinal, Msample] = bloch_euler(dt, B1, grad, x, T1, T2, options)
-% Simulate the Bloch equations using Euler method
+%% Simulate the Bloch equations using Euler method
+%  [Mfinal, Msample] = bloch_euler(dt, B1, grad, x, T1, T2, options)
 %
 % Units are whole SI units (m, s, T), NOT fractional units (mm, ms, us mT).
 % Unless otherwise noted, all inputs are expected to be real numbers.
 %
-% ~ Input ~
-% * dt (scalar): Time step between each sample of the input waveforms
+% Input
+% -----
+% dt : scalar
+%   Time step between each sample of the input waveforms
 %
 % Temporally-varying inputs
-% * B1 (1,T) (complex): Demodulated B1 (envelope function for on-resonance
-% excitation). Real and imaginary parts correspond to the x- and y-axes of
-% the rotating frame, respectively.
-% * grad (3,T): Gradient field waveforms along x-, y-, and z-axes
+% B1 : (1,T) complex
+%   Demodulated B1 (envelope function for on-resonance excitation). Real 
+%   and imaginary parts correspond to the x- and y-axes of the rotating 
+%   frame, respectively.
+% grad : (3,T)
+%   Gradient field waveforms along x-, y-, and z-axes
 %
 % Spatially-varying inputs
-% NOTE: [X] denotes up to 4 dimensions, enabling
-% the manipulation of collections that have up to 4 independent variables,
-% such as full 3D plus varying degrees of frequency shift.
-% * x (3,1,[X]): Spatial coordinates for each point
-% * T1 (1,1,[X]): Longitudinal relaxation time for each point
-% * T2 (1,1,[X]): Transverse relaxation time for each point
+%   NOTE: [X] denotes up to 4 dimensions, enabling
+%   the manipulation of collections that have up to 4 independent 
+%   variables, such as full 3D plus varying degrees of frequency shift.
+% x : (3,1,[X])
+%   Spatial coordinates for each point
+% T1 : (1,1,[X])
+%   Longitudinal relaxation time for each point
+% T2 : (1,1,[X])
+%   Transverse relaxation time for each point
 %
-% ~ Options ~
-% * gamma (scalar) [rad/(s*T)]: Gyromagnetic ratio for on-resonance
-% excitation. Default is that of water protons, 267.5153151e6.
-% * B0 (scalar) [T]: Main magnetic field strength. Default is 3.
-% * samplePeriod (scalar): Alternative to sampleComb, specifies how
-% frequently states should be added to Msample. Saves simulation state
-% after steps s:s:end, where s = round(samplePeriod/dt). Default gives
-% Msample = [].
+% Options
+% -------
+% gamma : scalar [rad/(s*T)]
+%   Gyromagnetic ratio for on-resonance excitation. Default is that of 
+%   water protons, 267.5153151e6.
+% B0 : scalar [T]
+%   Main magnetic field strength. Default is 3.
+% samplePeriod : scalar
+%   Alternative to sampleComb, specifies how frequently states should be 
+%   added to Msample. Saves simulation state after steps s:s:end, where 
+%   s = round(samplePeriod/dt). Default gives Msample = [].
 %
 % Temporally-varying optional inputs
-% * sampleComb (1,T) (boolean): Array that indicates which time points
-% should be included in Msample, with 'true' at all times where the state
-% should be included and 'false' everywhere else. Default gives Msample =
-% [].
-% * B0drift (1,T): Temporally varying changes in the main magnetic field,
-% applied as an additive factor. Default is 0 for all time.
+% sampleComb : (1,T) boolean
+%   Array that indicates which time points
+%   should be included in Msample, with 'true' at all times where the state
+%   should be included and 'false' everywhere else. Default gives
+%   `Msample = []`.
+% B0drift : (1,T)
+%   Temporally varying changes in the main magnetic field, applied as an 
+%   additive factor. Default is 0 for all time.
 %
 % Spatially-varying optional inputs
-% * B0map (1,1,[X]): Spatially varying main field inhomogeneities, applied
-% as an additive factor. Default is 0 for all points.
-% * B1map (1,1,[X]) [scale factor]: Spatially varying B1 field, applied by
-% multiplication with the B1 field at each time. Default is 1 for all
-% points.
-% * delta (1,1,[X]) [ppm]: Frequency offset / chemical shift. Default is 0
-% for all points.
-% * Meq (1,1,[X]): Equilibrium magnetization along Z-direction (usually
-% denoted by M0, but named differently to avoid confusion with Minit).
-% Default is 1 for all points.
-% * Minit (3,1,[X]): Initial magnetization vectors, if different from the
-% equilibrium magnetization. Default is [0, 0, Meq]' for all points.
+% B0map : (1,1,[X])
+%   Spatially varying main field inhomogeneities, applied as an additive 
+%   factor. Default is 0 for all points.
+% B1map : (1,1,[X]) [scale factor]
+%   Spatially varying B1 field, applied by multiplication with the B1 field
+%   at each time. Default is 1 for all points.
+% delta : (1,1,[X]) [ppm]
+%   Frequency offset / chemical shift. Default is 0 for all points.
+% Meq : (1,1,[X])
+%   Equilibrium magnetization along Z-direction (usually denoted by M0, but
+%   named differently to avoid confusion with Minit). Default is 1 for all 
+%   points.
+% Minit : (3,1,[X])
+%   Initial magnetization vectors, if different from the equilibrium 
+%   magnetization. Default is [0, 0, Meq]' for all points.
 %
-% ~ Output ~
-% * Mfinal (3,1,[X]): The last simulation state for each point in space
-% * Msample (3,S,[X]): Intermediate simulation states for each point in
-% space. Empty unless sampleComb or samplePeriod are defined.
+% Output
+% ------
+% Mfinal : (3,1,[X])
+%   The last simulation state for each point in space
+% Msample : (3,S,[X])
+%   Intermediate simulation states for each point in space. Empty unless 
+%   sampleComb or samplePeriod are defined.
 %
 %% 2023-05-04 Samuel Adams-Tew
 arguments
